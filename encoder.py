@@ -19,8 +19,10 @@ class VGG19Encoder(nn.Module):
 
 
     def extract_vgg19_pretrained_layers(self):
+        # get pretrained model
         features = torchvision.models.vgg19(pretrained=True, progress=True).features
 
+        # get blocks of layers we want
         feats1 = features[0:2]
         feats2 = features[2:7]
         feats3 = features[7:12]
@@ -30,6 +32,8 @@ class VGG19Encoder(nn.Module):
 
 
     def forward(self, x):
+        # get the final output, along with
+        # necessary intermediate outputs
         outputs = []
         for block in self.feats:
             x = block(x)

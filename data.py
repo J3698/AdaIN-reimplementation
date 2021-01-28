@@ -30,10 +30,10 @@ class StyleTransferDataset(Dataset):
 
 
     def __getitem__(self, idx):
-        content = self.coco[idx % len(self.coco)][0]
-        style = self.wiki[idx // len(self.coco)][0]
+        content_image = self.coco[idx % len(self.coco)][0]
+        style_image = self.wiki[idx // len(self.coco)][0]
 
-        return content, style
+        return content_image, style_image
 
 
 

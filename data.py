@@ -10,7 +10,7 @@ from random import randrange
 
 
 def main():
-    transforms = get_tansforms()
+    transforms = get_transforms()
     dataset = StyleTransferDataset("/home/anti/coco/train2017",  "/home/anti/coco/annotations/captions_train2017.json", "/home/anti/coco/wikiart", transform)
     print(f"Dataset length: {len(dataset)}, Wiki length: len(dataset.wiki), COCO length: len(dataset.coco)")
 
@@ -19,7 +19,7 @@ def main():
     print(f"1st style img: {type(style)}, {style.shape}")
 
 
-def get_tansforms():
+def get_transforms():
     return Compose([Resize(512), RandomCrop(256), ToTensor()])
 
 class StyleTransferDataset(IterableDataset):

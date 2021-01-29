@@ -12,7 +12,7 @@ def main():
 
     transform = get_tansforms()
     dataset = StyleTransferDataset("/home/anti/coco/train2017",  "/home/anti/coco/annotations/captions_train2017.json", "/home/anti/coco/wikiart", transform)
-    dataloader = DataLoader(dataset, batch_size = 1, shuffle = True, num_workers = 0)
+    dataloader = DataLoader(dataset, batch_size = 1, num_workers = 0)
     print("Created dataloader")
 
     for i, (content_image, style_image) in dataloader:

@@ -28,7 +28,7 @@ class StyleTransferDataset(IterableDataset):
         self.coco = CocoCaptions(coco_path, coco_annotations, transform = transform)
 
 
-    def __iter__(self, idx):
+    def __iter__(self):
         self.count = 0
         return self
 

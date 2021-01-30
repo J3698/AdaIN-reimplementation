@@ -12,6 +12,7 @@ print(f"num_workers: {NUM_WORKERS}, device: {DEVICE}")
 
 def main():
     encoder = VGG19Encoder()
+    encoder.freeze()
     decoder = Decoder()
     print("Created models")
 
@@ -21,8 +22,8 @@ def main():
     # dataset = StyleTransferDataset("/home/anti/coco/train2017",  "/home/anti/coco/annotations/captions_train2017.json", "/home/anti/coco/wikiart", transform)
     dataloader = DataLoader(dataset, batch_size = 1, num_workers = 0)
     print("Created dataloader")
-    
-    optimizer = torch.optim.Adam(params=list(encoder.parameters()) + list(decoder.parameters()))
+
+    optimizer = torch.optim.Adam(params = decoder.parameters())
 
     for i, (content_image, style_image) in enumerate(dataloader):
         content_image, style_image = content_image.to(DEVICE), style_image.to(DEVICE)

@@ -30,6 +30,9 @@ class VGG19Encoder(nn.Module):
 
         return feats1, feats2, feats3, feats4
 
+    def freeze(self):
+        for i in self.parameters():
+            i.requires_grad = False
 
     def forward(self, x):
         # get the final output, along with

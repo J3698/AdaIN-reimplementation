@@ -1,4 +1,5 @@
-coco
+coco/
+data/
 dev_notebook.ipynb
 *.pyc
 .vscode

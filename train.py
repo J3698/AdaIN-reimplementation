@@ -11,6 +11,10 @@ NUM_WORKERS = os.cpu_count() if cuda else 0
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"num_workers: {NUM_WORKERS}, device: {DEVICE}")
 
+COCO_PATH = "datasets/coco/train2017"
+COCO_LABELS_PATH = "datasets/coco/annotations/captions_train2017.json"
+WIKIART_PATH = "datasets/wikiart"
+
 def main():
     # init objects
     encoder = VGG19Encoder()
@@ -19,18 +23,19 @@ def main():
     print("Created models")
 
     transform = get_transforms()
-    dataset = StyleTransferDataset("coco/train2017",  "/coco/annotations/captions_train2017.json", "/coco/wikiart", transform)
+    dataset = StyleTransferDataset(COCO_PATH, COCO_LABELS_PATH,\
+                                   WIKIART_PATH, length = 1, transform = transform)
 
     # dataset = StyleTransferDataset("/home/anti/coco/train2017",  "/home/anti/coco/annotations/captions_train2017.json", "/home/anti/coco/wikiart", transform)
     dataloader = DataLoader(dataset, batch_size = 1, num_workers = 0)
     print("Created dataloader")
 
     optimizer = torch.optim.Adam(params = decoder.parameters())
-    
-    
+
+
     # Actual training
     num_epochs = 1
-    
+
     for epoch in range(num_epochs):
         train_epoch(encoder, decoder, dataloader, optimizer)
         validate(encoder, decoder, dataloader)
@@ -42,7 +47,7 @@ def train_epoch(encoder, decoder, dataloader, optimizer):
         optimizer.zero_grad()
 
         loss = get_batch_style_transfer_loss(encoder, decoder, content_image, style_image)
-        
+
         print(f"(Debug) Loss:{loss.item()}") # TODO: Remove after dev done
 
         loss.backward()
@@ -51,11 +56,11 @@ def train_epoch(encoder, decoder, dataloader, optimizer):
 
 def validate(encoder, decoder, dataloader):
     encoder.eval(); decoder.eval()
-    
+
     with torch.no_grad():
         for i, (content_image, style_image) in enumerate(dataloader):
             content_image, style_image = content_image.to(DEVICE), style_image.to(DEVICE)
-    
+
     # TODO: Finish
 
 
@@ -80,6 +85,11 @@ def create_stylized_image(decoder, content_features, style_features):
 
     return stylized_image, stylized_content_features
 
+def compute_style_loss(features_of_stylized, style_features):
+    return torch.tensor(0)# )sum([feature.sum() for feature in features_of_stylized])
+
+def compute_content_loss(features_of_stylized, style_features):
+    return sum([feature.sum() for feature in features_of_stylized])
 
 
 

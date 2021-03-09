@@ -31,6 +31,8 @@ class Decoder(nn.Module):
                                    kernel_size = layer.kernel_size, stride = layer.stride, \
                                    padding = layer.padding, padding_mode = 'reflect')
                 self.features[i] = conv2d
+            elif isinstance(layer, nn.ReLU):
+                layer.inplace = False
 
 
     def forward(self, x):

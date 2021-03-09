@@ -1,5 +1,6 @@
 from encoder import VGG19Encoder
 from decoder import Decoder
+import os
 from adain import adain
 from torch.utils.data import DataLoader
 from data import StyleTransferDataset, get_transforms
@@ -9,6 +10,7 @@ import matplotlib.pyplot as plt
 import torch.nn.functional as F
 import time
 import random
+from torch.utils.tensorboard import SummaryWriter
 
 # Determine constants
 cuda = torch.cuda.is_available()
@@ -24,6 +26,8 @@ torch.autograd.set_detect_anomaly(True)
 
 def main():
     # init objects
+    writer = SummaryWriter()
+
     encoder = VGG19Encoder()
     decoder = Decoder()
     print(decoder)
@@ -36,18 +40,22 @@ def main():
     dataloader = DataLoader(dataset, batch_size = 1, num_workers = 0)
     print("Created dataloader")
 
-    num_epochs = 100
+    num_epochs = 1000
     optimizer = torch.optim.Adam(params = decoder.parameters(), lr = 1e-3)
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, num_epochs)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose = True)
 
+    run = time.time()
+    os.mkdir(f"demo/{run}")
     for epoch in range(num_epochs):
         encoder.train()
         decoder.train()
-        train_epoch_reconstruct(encoder, decoder, dataloader, optimizer, epoch)
-        scheduler.step()
+        loss = train_epoch_reconstruct(encoder, decoder, dataloader, optimizer, \
+                                epoch, writer, run)
+        scheduler.step(loss)
 
 
-def train_epoch_reconstruct(encoder, decoder, dataloader, optimizer, epoch_num):
+def train_epoch_reconstruct(encoder, decoder, dataloader, optimizer, \
+                            epoch_num, writer, run):
     for i, (content_image, style_image) in enumerate(dataloader):
         content_image, _ = content_image.to(DEVICE), style_image.to(DEVICE)
 
@@ -55,16 +63,18 @@ def train_epoch_reconstruct(encoder, decoder, dataloader, optimizer, epoch_num):
         reconstruction = decoder(encoder(content_image)[-1])
 
         if epoch_num == 0:
-            show_tensor(content_image.detach().clone())
+            show_tensor(content_image.detach().clone(), 0, run)
 
         if epoch_num % 7 == 0:
-            show_tensor(reconstruction.detach().clone())
+            show_tensor(reconstruction.detach().clone(), epoch_num + 1, run)
 
         loss = F.mse_loss(content_image, reconstruction)
         loss.backward()
         optimizer.step()
 
+        writer.add_scalar('Loss/train', loss.item(), epoch_num)
         print(f"(Debug) {epoch_num} Loss:{loss.item()}") # TODO: Remove after dev done
+    return loss.item()
 
 
 def train_epoch_style_loss(encoder, decoder, dataloader, optimizer):
@@ -83,10 +93,10 @@ def train_epoch_style_loss(encoder, decoder, dataloader, optimizer):
         optimizer.step()
 
 
-def show_tensor(tensor):
+def show_tensor(tensor, num, run):
     image = tensor.squeeze().permute(1, 2, 0).numpy()
     plt.imshow(image)
-    plt.savefig(f"demo/{time.time()}.png")
+    plt.savefig(f"demo/{run}/{num}.png")
 
 
 def validate(encoder, decoder, dataloader):

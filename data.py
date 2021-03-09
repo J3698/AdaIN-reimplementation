@@ -6,7 +6,7 @@ from torchvision.datasets.folder import default_loader
 import os
 from torchvision.transforms import ToTensor, RandomCrop, Resize, Compose
 from torchvision.datasets import ImageFolder, CocoCaptions
-from random import randrange
+from random import randrange, seed
 
 
 
@@ -25,12 +25,17 @@ def get_transforms():
 
 class StyleTransferDataset(IterableDataset):
     def __init__(self, coco_path, coco_annotations, \
-                 wiki_path, length = 10000, transform = None):
+                 wiki_path, length = 10000, transform = None, rng_seed = 1):
 
         self.wiki = ImageFolder(wiki_path, transform = transform)
         self.coco = CocoCaptions(coco_path, coco_annotations, transform = transform)
-        self.length = 0
+        self.length = length
 
+        seed(rng_seed)
+        self.indices = [self.random_pair_of_indices() for i in range(length)]
+
+    def random_pair_of_indices(self):
+        return randrange(len(self.coco)), randrange(len(self.wiki))
 
     def __iter__(self):
         self.count = 0
@@ -38,12 +43,13 @@ class StyleTransferDataset(IterableDataset):
 
 
     def __next__(self):
-        if self.count > self.length:
+        if self.count >= self.length:
             raise StopIteration
+
         self.count += 1
 
-        coco_idx = randrange(len(self.coco))
-        wiki_idx = randrange(len(self.wiki))
+        coco_idx, wiki_idx = self.indices[self.count - 1]
+        print(coco_idx, wiki_idx)
 
         content_image = self.coco[coco_idx][0]
         style_image = self.wiki[wiki_idx][0]

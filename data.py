@@ -21,7 +21,9 @@ def main():
 
 
 def get_transforms():
-    return Compose([Resize(512), RandomCrop(256), ToTensor()])
+    # return Compose([Resize(512), RandomCrop(256), ToTensor()])
+    return Compose([Resize((256, 256)), ToTensor()])
+
 
 class StyleTransferDataset(IterableDataset):
     def __init__(self, coco_path, coco_annotations, \

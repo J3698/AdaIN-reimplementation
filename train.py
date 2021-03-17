@@ -107,7 +107,7 @@ def show_tensor(tensor, num, run, info = ""):
     image[image > 1] = 1
     image[image < 0] = 0
     plt.imshow(image)
-    plt.savefig(f"demo/{run}/{num}.png")
+    plt.savefig(f"demo/{run}/{info}{num}.png")
 
 
 def validate(encoder, decoder, dataloader):

@@ -2,6 +2,7 @@ from encoder import VGG19Encoder
 from decoder import Decoder
 import os
 from adain import adain
+import tqdm
 from torch.utils.data import DataLoader
 from data import StyleTransferDataset, get_transforms
 import torch
@@ -16,10 +17,12 @@ from torch.utils.tensorboard import SummaryWriter
 cuda = torch.cuda.is_available()
 NUM_WORKERS = os.cpu_count() if cuda else 0
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+BATCH_SIZE = 32 if cuda else 1
+DATASET_LENGTH = 10000
 print(f"num_workers: {NUM_WORKERS}, device: {DEVICE}")
 
-COCO_PATH = "datasets/coco/train2017"
-COCO_LABELS_PATH = "datasets/coco/annotations/captions_train2017.json"
+COCO_PATH = "datasets/train2017"
+COCO_LABELS_PATH = "datasets/annotations/captions_train2017.json"
 WIKIART_PATH = "datasets/wikiart"
 
 torch.autograd.set_detect_anomaly(True)
@@ -28,24 +31,25 @@ def main():
     # init objects
     writer = SummaryWriter()
 
-    encoder = VGG19Encoder()
-    decoder = Decoder()
+    encoder = VGG19Encoder().to(DEVICE)
+    decoder = Decoder().to(DEVICE)
     print(decoder)
     print("Created models")
 
     transform = get_transforms()
     dataset = StyleTransferDataset(COCO_PATH, COCO_LABELS_PATH,\
-                                   WIKIART_PATH, length = 1, transform = transform)
+                                   WIKIART_PATH, length = DATASET_LENGTH,
+                                   transform = transform, exclude_style = True)
 
-    dataloader = DataLoader(dataset, batch_size = 1, num_workers = 0)
+    dataloader = DataLoader(dataset, batch_size = BATCH_SIZE, num_workers = 0)
     print("Created dataloader")
 
-    num_epochs = 1000
+    num_epochs = 50
     optimizer = torch.optim.Adam(params = decoder.parameters(), lr = 1e-3)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose = True)
 
     run = time.time()
-    os.mkdir(f"demo/{run}")
+    os.makedirs(f"demo/{run}")
     for epoch in range(num_epochs):
         encoder.train()
         decoder.train()
@@ -56,26 +60,28 @@ def main():
 
 def train_epoch_reconstruct(encoder, decoder, dataloader, optimizer, \
                             epoch_num, writer, run):
-    for i, (content_image, style_image) in enumerate(dataloader):
-        content_image, _ = content_image.to(DEVICE), style_image.to(DEVICE)
+    total_loss = 0
+    for i, content_image in tqdm.tqdm(enumerate(dataloader), total = len(dataloader)):
+        content_image = content_image.to(DEVICE)
 
         optimizer.zero_grad()
         reconstruction = decoder(encoder(content_image)[-1])
 
-        if epoch_num == 0:
-            show_tensor(content_image.detach().clone(), 0, run)
-
-        if epoch_num % 7 == 0:
-            show_tensor(reconstruction.detach().clone(), epoch_num + 1, run)
+        if i == 0:
+            show_tensor(reconstruction[0].detach().clone(), epoch_num, run, info = "recon1")
+            show_tensor(content_image[0].detach().clone(), epoch_num, run, info = "orgnl1")
+            show_tensor(reconstruction[0].detach().clone(), epoch_num, run, info = "recon2")
+            show_tensor(content_image[0].detach().clone(), epoch_num, run, info = "orgnl2")
 
         loss = F.mse_loss(content_image, reconstruction)
         loss.backward()
         optimizer.step()
 
-        writer.add_scalar('Loss/train', loss.item(), epoch_num)
-        print(f"(Debug) {epoch_num} Loss:{loss.item()}") # TODO: Remove after dev done
-    return loss.item()
+        total_loss += loss.item()
 
+    writer.add_scalar('Loss/train', total_loss, epoch_num)
+    print(f"Epoch {epoch_num}, Loss {total_loss}")
+    return total_loss
 
 def train_epoch_style_loss(encoder, decoder, dataloader, optimizer):
     for i, (content_image, style_image) in enumerate(dataloader):
@@ -93,8 +99,13 @@ def train_epoch_style_loss(encoder, decoder, dataloader, optimizer):
         optimizer.step()
 
 
-def show_tensor(tensor, num, run):
-    image = tensor.squeeze().permute(1, 2, 0).numpy()
+def show_tensor(tensor, num, run, info = ""):
+    if info != "":
+        info += "-"
+
+    image = tensor.cpu().squeeze().permute(1, 2, 0).numpy()
+    image[image > 1] = 1
+    image[image < 0] = 0
     plt.imshow(image)
     plt.savefig(f"demo/{run}/{num}.png")
 

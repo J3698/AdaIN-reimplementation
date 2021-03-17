@@ -70,8 +70,8 @@ def train_epoch_reconstruct(encoder, decoder, dataloader, optimizer, \
         if i == 0:
             show_tensor(reconstruction[0].detach().clone(), epoch_num, run, info = "recon1")
             show_tensor(content_image[0].detach().clone(), epoch_num, run, info = "orgnl1")
-            show_tensor(reconstruction[0].detach().clone(), epoch_num, run, info = "recon2")
-            show_tensor(content_image[0].detach().clone(), epoch_num, run, info = "orgnl2")
+            show_tensor(reconstruction[1].detach().clone(), epoch_num, run, info = "recon2")
+            show_tensor(content_image[1].detach().clone(), epoch_num, run, info = "orgnl2")
 
         loss = F.mse_loss(content_image, reconstruction)
         loss.backward()

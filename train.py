@@ -19,21 +19,28 @@ NUM_WORKERS = os.cpu_count() if cuda else 0
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 BATCH_SIZE = 32 if cuda else 1
 DATASET_LENGTH = 10000
+NUM_EPOCHS = 200
+
 print(f"num_workers: {NUM_WORKERS}, device: {DEVICE}")
 
 COCO_PATH = "datasets/train2017"
 COCO_LABELS_PATH = "datasets/annotations/captions_train2017.json"
 WIKIART_PATH = "datasets/wikiart"
 
-torch.autograd.set_detect_anomaly(True)
+writer = SummaryWriter()
+writer.add_text('batch size', str(BATCH_SIZE), 0)
+writer.add_text('is gpu ', str(cuda), 0)
+writer.add_text('dataset length ', str(DATASET_LENGTH), 0)
+writer.add_text('num workers ', str(NUM_WORKERS), 0)
+writer.add_text('num epochs ', str(NUM_EPOCHS), 0)
 
 def main():
-    # init objects
-    writer = SummaryWriter()
-
     encoder = VGG19Encoder().to(DEVICE)
     decoder = Decoder().to(DEVICE)
+    print(encoder)
     print(decoder)
+    writer.add_text('encoder', repr(encoder), 0)
+    writer.add_text('decoder', repr(decoder), 0)
     print("Created models")
 
     transform = get_transforms()
@@ -41,27 +48,31 @@ def main():
                                    WIKIART_PATH, length = DATASET_LENGTH,
                                    transform = transform, exclude_style = True)
 
-    dataloader = DataLoader(dataset, batch_size = BATCH_SIZE, num_workers = 0)
+    dataloader = DataLoader(dataset, batch_size = BATCH_SIZE,
+                            num_workers = NUM_WORKERS, shuffle = True)
     print("Created dataloader")
 
-    num_epochs = 50
     optimizer = torch.optim.Adam(params = decoder.parameters(), lr = 1e-3)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose = True)
 
     run = time.time()
     os.makedirs(f"demo/{run}")
-    for epoch in range(num_epochs):
-        encoder.train()
-        decoder.train()
-        loss = train_epoch_reconstruct(encoder, decoder, dataloader, optimizer, \
-                                epoch, writer, run)
+    for epoch in range(NUM_EPOCHS):
+
+        if epoch % 7 == 0:
+            torch.save(encoder, f"demo/{run}/enc-{epoch}.pt")
+            torch.save(decoder, f"demo/{run}/dec-{epoch}.pt")
+
+        loss = train_epoch_reconstruct(encoder, decoder, dataloader, optimizer, epoch, writer, run)
         scheduler.step(loss)
 
 
-def train_epoch_reconstruct(encoder, decoder, dataloader, optimizer, \
-                            epoch_num, writer, run):
+def train_epoch_reconstruct(encoder, decoder, dataloader, optimizer, epoch_num, writer, run):
+    encoder.train()
+    decoder.train()
+
     total_loss = 0
-    for i, content_image in tqdm.tqdm(enumerate(dataloader), total = len(dataloader)):
+    for i, content_image in tqdm.tqdm(enumerate(dataloader), total = len(dataloader), dynamic_ncols = True):
         content_image = content_image.to(DEVICE)
 
         optimizer.zero_grad()
@@ -93,7 +104,7 @@ def train_epoch_style_loss(encoder, decoder, dataloader, optimizer):
         loss = get_batch_style_transfer_loss(encoder, decoder, content_image, style_image)
         torch.nn.utils.clip_grad_norm_(decoder.parameters(), 5)
 
-        print(f"(Debug) Loss:{loss.item()}") # TODO: Remove after dev done
+        print(f"Loss: {loss.item()}") # TODO: Remove after dev done
 
         loss.backward()
         optimizer.step()
@@ -101,13 +112,13 @@ def train_epoch_style_loss(encoder, decoder, dataloader, optimizer):
 
 def show_tensor(tensor, num, run, info = ""):
     if info != "":
-        info += "-"
+        info = "-" + info
 
     image = tensor.cpu().squeeze().permute(1, 2, 0).numpy()
     image[image > 1] = 1
     image[image < 0] = 0
     plt.imshow(image)
-    plt.savefig(f"demo/{run}/{info}{num}.png")
+    plt.savefig(f"demo/{run}/{num}{info}.png")
 
 
 def validate(encoder, decoder, dataloader):

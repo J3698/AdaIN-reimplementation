@@ -3,3 +3,6 @@ data/
 dev_notebook.ipynb
 *.pyc
 .vscode
+*.pt
+*.swp
+*.swo

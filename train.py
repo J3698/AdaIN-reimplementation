@@ -20,6 +20,7 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 BATCH_SIZE = 32 if cuda else 1
 DATASET_LENGTH = 10000
 NUM_EPOCHS = 200
+LR = 1e-3
 
 print(f"num_workers: {NUM_WORKERS}, device: {DEVICE}")
 
@@ -52,7 +53,7 @@ def main():
                             num_workers = NUM_WORKERS, shuffle = True)
     print("Created dataloader")
 
-    optimizer = torch.optim.Adam(params = decoder.parameters(), lr = 1e-3)
+    optimizer = torch.optim.Adam(params = decoder.parameters(), lr = LR)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose = True)
 
     run = time.time()

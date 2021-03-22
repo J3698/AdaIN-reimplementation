@@ -46,7 +46,8 @@ class Decoder(nn.Module):
 
 
     def forward(self, x):
-        return self.features(x)
+        out = self.features(x)
+        return out
 
 
 if __name__ == "__main__":

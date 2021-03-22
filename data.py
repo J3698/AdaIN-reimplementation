@@ -11,8 +11,8 @@ from random import randrange, seed
 
 def main():
     transforms = get_transforms()
-    dataset = StyleTransferDataset("/home/anti/coco/train2017",  "/home/anti/coco/annotations/captions_train2017.json", "/home/anti/coco/wikiart", transform)
-    print(f"Dataset length: {len(dataset)}, Wiki length: len(dataset.wiki), COCO length: len(dataset.coco)")
+    dataset = StyleTransferDataset("datasets/coco/train2017",  "datasets/coco/annotations/captions_train2017.json", "datasets/wikiart", transform = transforms)
+    print(f"Dataset length: {len(dataset)}, Wiki length: {len(dataset.wiki)}, COCO length: {len(dataset.coco)}")
 
     content, style = dataset[0]
     print(f"1st content img: {type(content)}, {content.shape}")

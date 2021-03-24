@@ -46,7 +46,6 @@ class Decoder(nn.Module):
 
 
     def forward(self, x):
-        print(x.shape)
         out = self.features(x)
         return out
 

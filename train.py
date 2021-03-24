@@ -17,15 +17,15 @@ from torch.utils.tensorboard import SummaryWriter
 cuda = torch.cuda.is_available()
 NUM_WORKERS = os.cpu_count() if cuda else 0
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-BATCH_SIZE = 32 if cuda else 1
-DATASET_LENGTH = 10000
-NUM_EPOCHS = 200
+BATCH_SIZE = 32 if cuda else 3
+DATASET_LENGTH = 10000 if cuda else 1
+NUM_EPOCHS = 400
 LR = 1e-3
 
 print(f"num_workers: {NUM_WORKERS}, device: {DEVICE}")
 
-COCO_PATH = "datasets/train2017"
-COCO_LABELS_PATH = "datasets/annotations/captions_train2017.json"
+COCO_PATH = "datasets/coco/train2017"
+COCO_LABELS_PATH = "datasets/coco/annotations/captions_train2017.json"
 WIKIART_PATH = "datasets/wikiart"
 
 writer = SummaryWriter()
@@ -47,7 +47,7 @@ def main():
     transform = get_transforms()
     dataset = StyleTransferDataset(COCO_PATH, COCO_LABELS_PATH,\
                                    WIKIART_PATH, length = DATASET_LENGTH,
-                                   transform = transform, exclude_style = True)
+                                   transform = transform, exclude_style = False)
 
     dataloader = DataLoader(dataset, batch_size = BATCH_SIZE,
                             num_workers = NUM_WORKERS, shuffle = True)
@@ -59,12 +59,7 @@ def main():
     run = time.time()
     os.makedirs(f"demo/{run}")
     for epoch in range(NUM_EPOCHS):
-
-        if epoch % 7 == 0:
-            torch.save(encoder, f"demo/{run}/enc-{epoch}.pt")
-            torch.save(decoder, f"demo/{run}/dec-{epoch}.pt")
-
-        loss = train_epoch_reconstruct(encoder, decoder, dataloader, optimizer, epoch, writer, run)
+        loss = train_epoch_style_loss(encoder, decoder, dataloader, optimizer, epoch, writer, run)
         scheduler.step(loss)
 
 
@@ -95,20 +90,88 @@ def train_epoch_reconstruct(encoder, decoder, dataloader, optimizer, epoch_num, 
     print(f"Epoch {epoch_num}, Loss {total_loss}")
     return total_loss
 
-def train_epoch_style_loss(encoder, decoder, dataloader, optimizer):
-    for i, (content_image, style_image) in enumerate(dataloader):
+def train_epoch_style_loss(encoder, decoder, dataloader, optimizer, epoch_num, writer, run):
+    encoder.train()
+    decoder.train()
+
+    total_loss = 0
+    for i, (content_image, style_image) in tqdm.tqdm(enumerate(dataloader),\
+                                             total = len(dataloader), dynamic_ncols = True):
+
         content_image, style_image = content_image.to(DEVICE), style_image.to(DEVICE)
-
-        # show_tensor(content_image)
         optimizer.zero_grad()
-
-        loss = get_batch_style_transfer_loss(encoder, decoder, content_image, style_image)
-        torch.nn.utils.clip_grad_norm_(decoder.parameters(), 5)
-
-        print(f"Loss: {loss.item()}") # TODO: Remove after dev done
-
+        loss, stylized = get_batch_style_transfer_loss(encoder, decoder, content_image, style_image)
         loss.backward()
+        # torch.nn.utils.clip_grad_norm_(decoder.parameters(), 5)
         optimizer.step()
+
+        total_loss += loss.item()
+
+        if i == 0:
+            #show_tensor(style_image[0].detach().clone(), epoch_num, run, info = "style1")
+            #show_tensor(content_image[0].detach().clone(), epoch_num, run, info = "content1")
+            show_tensor(stylized[0].detach().clone(), epoch_num, run, info = "stylized1")
+
+    writer.add_scalar('Loss/train', total_loss, epoch_num)
+    print(f"Epoch {epoch_num}, Loss {total_loss}")
+    return total_loss
+
+
+def get_batch_style_transfer_loss(encoder, decoder, content_image, style_image, lambd = 1e-4):
+    style_features = encoder(style_image)
+    content_features = encoder(content_image)
+
+    stylized_images, stylized_features = create_stylized_images(decoder, content_features, style_features)
+
+    features_of_stylized = encoder(stylized_images)
+
+    style_loss = torch.tensor(0) #compute_style_loss(features_of_stylized, style_features) * lambd
+    content_loss = compute_content_loss(features_of_stylized[-1], stylized_features)
+    print(style_loss.item(), content_loss.item())
+
+    return style_loss + content_loss, stylized_images
+
+
+def create_stylized_images(decoder, content_features, style_features):
+    stylized_features = adain(content_features[-1], style_features[-1])
+    stylized_images = decoder(stylized_features)
+
+    return stylized_images, stylized_features
+
+
+def compute_content_loss(features_of_stylized, stylized_features):
+    return F.mse_loss(features_of_stylized, stylized_features, reduction = "mean")
+
+
+def compute_style_loss(features_of_stylized, style_features):
+    style_loss = 0
+
+    zipped_features = zip(features_of_stylized, style_features)
+    for feat_of_stylized, style_feat in zipped_features:
+        stats1 = calc_feature_stats_vector(feat_of_stylized)
+        stats2 = calc_feature_stats_vector(style_feat)
+        style_loss = style_loss + F.mse_loss(stats1, stats2, reduction = "mean")
+
+    return style_loss
+
+
+def calc_feature_stats_vector(features):
+    assert len(features.shape) == 4
+    batch_size, feature_maps, w, h = features.shape
+
+    features = features.view(batch_size * feature_maps, -1)
+
+    feature_vars = features.var(-1)
+    feature_means = features.mean(-1)
+    assert feature_vars.shape == (batch_size * feature_maps,), feature_vars.shape
+    assert feature_means.shape == (batch_size * feature_maps,), feature_means.shape
+
+    feature_vars = feature_vars.reshape(batch_size, feature_maps)
+    feature_means = feature_means.reshape(batch_size, feature_maps)
+    stats_vectors = torch.hstack((feature_vars, feature_means))
+    assert stats_vectors.shape == (batch_size, 2 * feature_maps)
+
+    return stats_vectors
 
 
 def show_tensor(tensor, num, run, info = ""):
@@ -130,51 +193,6 @@ def validate(encoder, decoder, dataloader):
             content_image, style_image = content_image.to(DEVICE), style_image.to(DEVICE)
 
     # TODO: Finish
-
-
-
-def get_batch_style_transfer_loss(encoder, decoder, content_image, style_image):
-    style_features = encoder(style_image)
-    content_features = encoder(content_image)
-
-    stylized_image, stylized_features = create_stylized_image(decoder, content_features, style_features)
-    if random.random() < 0.1:
-        show_tensor(stylized_image.clone().detach())
-
-    features_of_stylized = encoder(stylized_image)
-
-    style_loss = compute_style_loss(features_of_stylized, style_features)
-    #content_loss = compute_content_loss(features_of_stylized[-1], stylized_features)
-    content_loss = compute_content_loss(content_features[-1], stylized_features)
-
-    return style_loss + content_loss
-
-
-def create_stylized_image(decoder, content_features, style_features):
-    # stylized_content_features = adain(content_features[-1], style_features[-1])
-    # stylized_image = decoder(stylized_content_features)
-    stylized_image = decoder(content_features[-1])
-
-    return stylized_image, content_features[-1]#stylized_content_features
-
-
-def compute_content_loss(feature_of_stylized, stylized_features):
-    return F.mse_loss(feature_of_stylized, stylized_features, reduction = "mean")
-
-
-def compute_style_loss(features_of_stylized, style_features):
-    return 0
-    style_loss = 0
-
-    zipped_features = zip(features_of_stylized, style_features)
-    for feat_of_stylized, style_feat in zipped_features:
-        stats1 = calc_feature_stats_vector(feat_of_stylized)
-        stats2 = calc_feature_stats_vector(style_feat)
-        style_loss += F.mse_loss(stats1, stats2, reduction="mean")
-
-    return style_loss
-
-
 
 
 if __name__ == "__main__":

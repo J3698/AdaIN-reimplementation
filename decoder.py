@@ -9,7 +9,7 @@ def main():
     decoder = Decoder()
     print(decoder)
 
-    sample_input = torch.ones((1, 3, 256, 256))
+    sample_input = torch.ones((2, 3, 256, 256))
     outputs = encoder(sample_input)
     output = decoder(outputs[-1])
 
@@ -46,6 +46,7 @@ class Decoder(nn.Module):
 
 
     def forward(self, x):
+        print(x.shape)
         out = self.features(x)
         return out
 

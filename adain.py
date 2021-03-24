@@ -16,26 +16,27 @@ def main():
     # check variances the same
     target_variances = target.var(-1)
     stylized_variances = target.var(-1)
-    print(torch.all(torch.abs(stylized_variances - target_variances) < 1e-6))
+    assert torch.all(torch.abs(stylized_variances - target_variances) < 1e-6)
 
     # check means the same
     target_means = target.mean(-1)
     stylized_means = target.mean(-1)
-    print(torch.all(torch.avs(stylized_means - target_means) < 1e-6))
+    assert torch.all(torch.abs(stylized_means - target_means) < 1e-6)
 
     # check values are just rescaled / shifted
-    print(torch.all(torch.abs(F.instance_norm(source) - F.instance_norm(stylized_source.view(8, 3, 4, 4))) < 1e-6))
+    diff = F.instance_norm(source) - F.instance_norm(stylized_source.view(8, 3, 4, 4))
+    assert torch.all(torch.abs(diff) < 1e-6)
 
 
 def adain(source, target):
     # check shapes
-    # assert len(target.shape) == 4, "expected 4 dimensions"
-    # assert target.shape == source.shape, "source/target shape mismatch"
+    assert len(target.shape) == 4, "expected 4 dimensions"
+    assert target.shape == source.shape, "source/target shape mismatch"
     batch_size, channels, width, height = source.shape
 
     # calculate target stats
     #target = target.view(batch_size, channels, 1, 1, -1) #dont work for export
-    target_reshaped = target.view(1, 512, 1, 1, -1)
+    target_reshaped = target.view(1, channels, 1, 1, -1)
     target_variances = target_reshaped.var(-1)
     target_means = target_reshaped.mean(-1)
 
@@ -43,7 +44,7 @@ def adain(source, target):
     normalized = F.instance_norm(source)
     result = source * (target_variances ** 0.5) + target_means
 
-    # assert result.shape == (batch_size, channels, width, height)
+    assert result.shape == (batch_size, channels, width, height)
     return result
 
 

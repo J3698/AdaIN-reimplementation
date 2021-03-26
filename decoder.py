@@ -31,18 +31,13 @@ class Decoder(nn.Module):
                                    kernel_size = layer.kernel_size, stride = layer.stride, \
                                    padding = layer.padding, padding_mode = 'reflect')
                 with torch.no_grad():
-                    conv2d.weight[...] = layer.weight.transpose(0, 1)
+                    torch.nn.init.kaiming_normal_(conv2d.weight, nonlinearity='relu')
+                    torch.nn.init.zeros_(conv2d.bias)
                 features[i] = conv2d
             elif isinstance(layer, nn.ReLU):
                 layer.inplace = False
 
-        features_list = []
-        for layer in features:
-            features_list.append(layer)
-            if isinstance(layer, nn.Conv2d):
-                features_list.append(nn.BatchNorm2d(layer.out_channels))
-        del features_list[-1]
-        self.features = nn.Sequential(*features_list)
+        self.features = features
 
 
     def forward(self, x):

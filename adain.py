@@ -5,27 +5,36 @@ import torch.nn.functional as F
 
 
 def main():
-    target = torch.randint(-20, 20, (8, 3, 4, 4)).float()
-    source = torch.randint(-20, 20, (8, 3, 4, 4)).float()
+    batch_size = 8
+    channels = 5
+    w = 6
+    h = 6
+    source = torch.randint(-5, 5, (batch_size, channels, w, h)).float()
+    target = torch.randint(-5, 5, (batch_size, channels, w, h)).float()
 
     stylized_source = adain(source, target)
 
-    target = target.view(8, 3, -1)
-    stylized_source = stylized_source.view(8, 3, -1)
+    target = target.view(batch_size, channels, -1)
+    stylized_source = stylized_source.view(batch_size, channels, -1)
 
     # check variances the same
-    target_variances = target.var(-1)
-    stylized_variances = target.var(-1)
-    assert torch.all(torch.abs(stylized_variances - target_variances) < 1e-6)
+    target_variances = target.var(-1, unbiased = False)
+    stylized_variances = stylized_source.var(-1, unbiased = False)
+    assert torch.all(torch.abs(stylized_variances - target_variances) < 1e-4), \
+            (target_variances, stylized_variances)
+    print("Vars match")
 
     # check means the same
     target_means = target.mean(-1)
-    stylized_means = target.mean(-1)
-    assert torch.all(torch.abs(stylized_means - target_means) < 1e-6)
+    stylized_means = stylized_source.mean(-1)
+    assert torch.all(torch.abs(stylized_means - target_means) < 1e-4)
+    print("Means match")
 
     # check values are just rescaled / shifted
-    diff = F.instance_norm(source) - F.instance_norm(stylized_source.view(8, 3, 4, 4))
-    assert torch.all(torch.abs(diff) < 1e-6)
+    stylized_reshaped = stylized_source.view(batch_size, channels, w, h)
+    diff = F.instance_norm(source) - F.instance_norm(stylized_reshaped)
+    assert torch.all(torch.abs(diff) < 1e-4)
+    print("Vals match")
 
 
 def adain(source, target):
@@ -36,13 +45,14 @@ def adain(source, target):
 
     # calculate target stats
     #target = target.view(batch_size, channels, 1, 1, -1) #dont work for export
-    target_reshaped = target.view(1, channels, 1, 1, -1)
-    target_variances = target_reshaped.var(-1)
+    target_reshaped = target.view(batch_size, channels, 1, 1, -1)
+    target_variances = target_reshaped.var(-1, unbiased = False)
     target_means = target_reshaped.mean(-1)
 
     # normalize and rescale source to match target stats
     normalized = F.instance_norm(source)
-    result = source * (target_variances ** 0.5) + target_means
+
+    result = normalized * (target_variances ** 0.5) + target_means
 
     assert result.shape == (batch_size, channels, width, height)
     return result

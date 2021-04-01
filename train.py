@@ -18,10 +18,10 @@ cuda = torch.cuda.is_available()
 NUM_WORKERS = os.cpu_count() if cuda else 0
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 BATCH_SIZE = 16 if cuda else 3
-DATASET_LENGTH = 10000 if cuda else 1
+DATASET_LENGTH = 1 if cuda else 1
 NUM_EPOCHS = 1000
 LR = 1e-3
-LAMBD = 3e-3
+LAMBD = 0.1
 
 print(f"num_workers: {NUM_WORKERS}, device: {DEVICE}")
 
@@ -35,6 +35,7 @@ writer.add_text('is gpu ', str(cuda), 0)
 writer.add_text('dataset length ', str(DATASET_LENGTH), 0)
 writer.add_text('num workers ', str(NUM_WORKERS), 0)
 writer.add_text('num epochs ', str(NUM_EPOCHS), 0)
+writer.add_text('lambd', str(LAMBD), 0)
 
 def main():
     encoder = VGG19Encoder().to(DEVICE)
@@ -84,13 +85,15 @@ def train_epoch_style_loss(encoder, decoder, dataloader, optimizer, epoch_num, w
         optimizer.step()
 
         total_loss += (style_loss + content_loss).item()
-        progress_bar.set_postfix({'loss': f"{total_loss / (i + 1e-10):.2f}"})
+
+        progress_bar.set_postfix({'loss': f"{total_loss / (i + 1):.2f}"})
 
         if i % 300 == 0:
             step = (len(dataloader) // 300 + 1) * epoch_num + i // 300
-            writer.add_image('style', style_image[0].cpu().detach().clone(), step)
-            writer.add_image('content', content_image[0].cpu().detach().clone(), step)
-            writer.add_image('stylized', stylized[0].cpu().detach().clone(), step)
+            #writer.add_image('style', style_image[0].cpu().detach().clone(), step)
+            #writer.add_image('content', content_image[0].cpu().detach().clone(), step)
+            if epoch_num % 10 == 0:
+                writer.add_image('stylized', stylized[0].cpu().detach().clone(), step)
 
         writer.add_scalar('SLoss/train_it', style_loss.item(), epoch_num * len(dataloader) + i)
         writer.add_scalar('CLoss/train_it', content_loss.item(), epoch_num * len(dataloader) + i)
@@ -111,6 +114,7 @@ def get_batch_style_transfer_loss(encoder, decoder, content_image, style_image, 
 
     style_loss = compute_style_loss(features_of_stylized, style_features) * lambd
     content_loss = compute_content_loss(features_of_stylized[-1], stylized_features)
+    print(style_loss.item(), content_loss.item())
 
     return style_loss, content_loss, stylized_images
 
@@ -145,7 +149,7 @@ def calc_feature_stats_vectors(features):
 
     features = features.view(batch_size * feature_maps, -1)
 
-    feature_vars = features.var(-1)
+    feature_vars = features.var(-1, unbiased = False)
     feature_means = features.mean(-1)
     assert feature_vars.shape == (batch_size * feature_maps,), feature_vars.shape
     assert feature_means.shape == (batch_size * feature_maps,), feature_means.shape

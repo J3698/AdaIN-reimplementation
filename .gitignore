@@ -1,5 +1,4 @@
-coco/
-data/
+datasets/
 dev_notebook.ipynb
 *.pyc
 .vscode
@@ -8,3 +7,4 @@ dev_notebook.ipynb
 *.swo
 runs/
 demo/
+*.pt

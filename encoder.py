@@ -23,6 +23,11 @@ class VGG19Encoder(nn.Module):
         # get pretrained model
         features = torchvision.models.vgg19(pretrained=True, progress=True).features
 
+        # change to reflection
+        for i in features:
+            if isinstance(i, nn.Conv2d):
+                i.padding_mode = 'reflect'
+
         # get blocks of layers we want
         feats1 = features[0:2]
         feats2 = features[2:7]

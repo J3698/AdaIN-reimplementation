@@ -5,7 +5,7 @@ from adain import adain
 from math import ceil
 import tqdm
 from torch.utils.data import DataLoader
-from data import IterableStyleTransferDataset, get_transforms
+from data import StyleTransferDataset, IterableStyleTransferDataset, get_transforms
 import torch
 import torch.optim as optim
 import matplotlib.pyplot as plt
@@ -17,15 +17,15 @@ import argparse
 
 # Determine constants
 cuda = torch.cuda.is_available()
-NUM_WORKERS = os.cpu_count() if cuda else 0
+NUM_WORKERS = 1# os.cpu_count() if cuda else 0
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 BATCH_SIZE = 16 if cuda else 3
-DATASET_LENGTH = 4000 if cuda else 1
+DATASET_LENGTH = 1000 if cuda else 1
 NUM_EPOCHS = 10000
 LR = 1e-3
-LAMBD_STYLE = 0.1
+LAMBD_STYLE = 1e1
 LAMBD_CONTENT = 1
-SEED = 303
+SEED = 3033157
 
 print(f"num_workers: {NUM_WORKERS}, device: {DEVICE}")
 
@@ -33,18 +33,11 @@ COCO_PATH = "datasets/train2017"
 COCO_LABELS_PATH = "datasets/annotations/captions_train2017.json"
 WIKIART_PATH = "datasets/wikiart"
 
-writer = SummaryWriter()
-writer.add_text('batch size', str(BATCH_SIZE), 0)
-writer.add_text('is gpu ', str(cuda), 0)
-writer.add_text('dataset length ', str(DATASET_LENGTH), 0)
-writer.add_text('num workers ', str(NUM_WORKERS), 0)
-writer.add_text('num epochs ', str(NUM_EPOCHS), 0)
-writer.add_text('lambd style', str(LAMBD_STYLE), 0)
-writer.add_text('lambd content', str(LAMBD_CONTENT), 0)
 
 def main():
     global COCO_LABELS_PATH, SEED, BATCH_SIZE, COCO_LABELS_PATH, WIKIART_PATH,\
-            NUM_WORKERS, DEVICE, DATASET_LENGTH, LR, LAMBD_STYLE, COCO_PATH
+            NUM_WORKERS, DEVICE, DATASET_LENGTH, LR, LAMBD_STYLE, COCO_PATH, NUM_EPOCHS,\
+            LAMBD_CONTENT, LAMBD_STYLE
 
     encoder = VGG19Encoder().to(DEVICE)
     decoder = Decoder().to(DEVICE)
@@ -52,8 +45,6 @@ def main():
     decoder.train()
     print(encoder)
     print(decoder)
-    writer.add_text('encoder', repr(encoder), 0)
-    writer.add_text('decoder', repr(decoder), 0)
     print("Created models")
 
     transform = get_transforms()
@@ -62,19 +53,22 @@ def main():
                                    transform = transform, exclude_style = False,
                                    rng_seed = SEED)
 
-    dataloader = DataLoader(dataset, batch_size = BATCH_SIZE,
+    dataloader = DataLoader(dataset, batch_size = BATCH_SIZE, \
                             num_workers = NUM_WORKERS)
     print("Created dataloader")
 
     optimizer = torch.optim.Adam(params = decoder.parameters(), lr = LR)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience = 100,
-                                                     verbose = True, threshold = 0)
+                                             verbose = True, threshold = 0)
     saved_epoch = 0
 
     parser = argparse.ArgumentParser(description='Train the model :)')
+    parser.add_argument('comment', type=str, help='run comment')
     parser.add_argument('--checkpoint', type=str, default=None,
                         help='file to load training from')
     args = parser.parse_args()
+
+
     if args.checkpoint is not None:
 
         checkpoint = torch.load(args.checkpoint)
@@ -97,7 +91,7 @@ def main():
         del checkpoint['num_epochs']
         LAMBD_STYLE = checkpoint['lambda_style']
         del checkpoint['lambda_style']
-        SEED = checkpoint['seed'] + 13
+        SEED = checkpoint['seed'] + 1
         del checkpoint['seed']
         COCO_LABELS_PATH = checkpoint['coco_labels_path']
         del checkpoint['coco_labels_path']
@@ -121,6 +115,17 @@ def main():
                                 num_workers = NUM_WORKERS)
         assert len(checkpoint) == 0, checkpoint
 
+    writer = SummaryWriter(comment = args.comment)
+    writer.add_text('batch size', str(BATCH_SIZE), 0)
+    writer.add_text('is gpu ', str(cuda), 0)
+    writer.add_text('dataset length ', str(DATASET_LENGTH), 0)
+    writer.add_text('num workers ', str(NUM_WORKERS), 0)
+    writer.add_text('num epochs ', str(NUM_EPOCHS), 0)
+    writer.add_text('lambd style', str(LAMBD_STYLE), 0)
+    writer.add_text('lambd content', str(LAMBD_CONTENT), 0)
+    writer.add_text('encoder', repr(encoder), 0)
+    writer.add_text('decoder', repr(decoder), 0)
+    writer.add_text('lr', str(LR), 0)
 
     run = time.time()
     os.makedirs(f"demo/{run}")
@@ -151,7 +156,12 @@ def train_epoch_style_loss(encoder, decoder, dataloader, optimizer, epoch_num, w
     decoder.train()
 
     total_loss = 0
-    num_iters = ceil(len(dataloader) / BATCH_SIZE)
+    num_iters = len(dataloader)
+    if isinstance(dataloader.dataset, IterableStyleTransferDataset):
+        num_iters = ceil(len(dataloader) / BATCH_SIZE)
+        print(num_iters)
+    print(num_iters)
+
     progress_bar = tqdm.tqdm(enumerate(dataloader), total = num_iters, dynamic_ncols = True)
     for i, (content_image, style_image) in progress_bar:
 
@@ -272,19 +282,19 @@ def compute_style_loss(features_of_stylized, style_features):
 
     zipped_features = zip(features_of_stylized, style_features)
     for feat_of_stylized, style_feat in zipped_features:
-        vars1, means1 = calc_feature_stats_vectors(feat_of_stylized)
-        vars2, means2 = calc_feature_stats_vectors(style_feat)
+        stdevs1, means1 = calc_feature_stats_vectors(feat_of_stylized)
+        stdevs2, means2 = calc_feature_stats_vectors(style_feat)
 
-        var_loss_vector = F.mse_loss(vars1, vars2, reduction = "none")
+        stdev_loss_vector = F.mse_loss(stdevs1, stdevs2, reduction = "none")
         mean_loss_vector = F.mse_loss(means1, means2, reduction = "none")
 
-        var_loss_vector = var_loss_vector.view(g_batch_size, -1)
-        var_losses = var_loss_vector.sum(-1)
-        # assert var_losses.shape == (g_batch_size,)
-        style_loss += var_losses.mean()
+        stdev_loss_vector = stdev_loss_vector.view(g_batch_size, -1)
+        stdev_losses = stdev_loss_vector.sum(-1) ** 0.5
+        # assert stdev_losses.shape == (g_batch_size,)
+        style_loss += stdev_losses.mean()
 
         mean_loss_vector = mean_loss_vector.view(g_batch_size, -1)
-        mean_losses = mean_loss_vector.sum(-1)
+        mean_losses = mean_loss_vector.sum(-1) ** 0.5
         # assert mean_losses.shape == (g_batch_size,)
         style_loss += mean_losses.mean()
 
@@ -299,15 +309,15 @@ def calc_feature_stats_vectors(features):
     features = features.view(batch_size * feature_maps, -1)
     # assert features.shape == (g_batch_size * feature_maps, w * h)
 
-    feature_vars = features.var(-1, unbiased = False)
+    feature_stdevs = features.var(-1, unbiased = False) ** 0.5
     feature_means = features.mean(-1)
     # assert feature_vars.shape == (batch_size * feature_maps,), feature_vars.shape
     # assert feature_means.shape == (batch_size * feature_maps,), feature_means.shape
 
-    feature_vars = feature_vars.reshape(batch_size, feature_maps)
+    feature_stdevs = feature_stdevs.reshape(batch_size, feature_maps)
     feature_means = feature_means.reshape(batch_size, feature_maps)
 
-    return feature_vars, feature_means
+    return feature_stdevs, feature_means
 
 
 def show_tensor(tensor, num, run, info = ""):

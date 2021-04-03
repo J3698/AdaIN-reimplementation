@@ -10,6 +10,9 @@ from random import randrange, seed
 import random
 from math import ceil
 
+# https://stackoverflow.com/a/47958486/4142985
+from PIL import Image, ImageFile
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 def main():
     transforms = get_transforms()
@@ -72,7 +75,7 @@ class IterableStyleTransferDataset(IterableDataset):
     def __iter__(self):
         worker_info = torch.utils.data.get_worker_info()
         if worker_info is not None:
-            self.random.seed(self.seed + worker_info.id)
+            self.random.seed(round(1000 * random.random()))
 
             length = ceil(self.length // worker_info.num_workers)
             if worker_info.id == worker_info.num_workers - 1:

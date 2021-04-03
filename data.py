@@ -14,39 +14,6 @@ from math import ceil
 from PIL import Image, ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-def main():
-    transforms = get_transforms()
-
-    coco_path = "datasets/train2017"
-    coco_annot = "datasets/annotations/captions_train2017.json"
-    wiki_path = "datasets/wikiart"
-    dataset = StyleTransferDataset(coco_path, coco_annot, wiki_path, transform = transforms)
-    print(f"Dataset length: {len(dataset)}, Wiki length: {len(dataset.wiki)}, COCO length: {len(dataset.coco)}")
-
-    content, style = dataset[0]
-    print(f"1st content img: {type(content)}, {content.shape}")
-    print(f"1st style img: {type(style)}, {style.shape}")
-
-    dataset = IterableStyleTransferDataset(coco_path, coco_annot, wiki_path, transform = transforms)
-    print(f"Dataset length: {len(dataset)}, Wiki length: {len(dataset.wiki)}, COCO length: {len(dataset.coco)}")
-
-    a = DataLoader(dataset, num_workers = 2)
-    it = iter(a)
-    content1, style1 = next(it)
-    content2, style2 = next(it)
-    assert not torch.all(content1 == content2)
-    assert not torch.all(style1 == style2)
-    print(f"1st content img: {type(content1)}, {content1.shape}")
-    print(f"1st style img: {type(style1)}, {style1.shape}")
-
-
-    dataset = IterableStyleTransferDataset(coco_path, coco_annot, wiki_path, transform = transforms, length = 323)
-    j = 0
-    for x, y in DataLoader(dataset, num_workers = 4): 
-        j += len(x)
-    assert j == 323, j
-
-
 
 def get_transforms():
     return Compose([Resize((256, 256)), ToTensor()])
@@ -128,6 +95,7 @@ class StyleTransferDataset(Dataset):
         self.exclude_style = exclude_style
 
         seed(rng_seed)
+        random.random()
         print(length)
         self.indices = [self.random_pair_of_indices() for i in range(length)]
 

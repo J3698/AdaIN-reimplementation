@@ -4,20 +4,6 @@ import torch
 from encoder import VGG19Encoder
 
 
-def main():
-    encoder = VGG19Encoder()
-    decoder = Decoder()
-    print(decoder)
-
-    sample_input = torch.ones((2, 3, 256, 256))
-    outputs = encoder(sample_input)
-    output = decoder(outputs[-1])
-
-    print(f"Input shape: {sample_input.shape}")
-    print(f"Intermediate shapes: {[output.shape for output in outputs]}")
-    print(f"Output shape: {output.shape}")
-
-
 class Decoder(nn.Module):
     def __init__(self):
         super().__init__()
@@ -37,13 +23,10 @@ class Decoder(nn.Module):
             elif isinstance(layer, nn.ReLU):
                 layer.inplace = False
 
+        # features[-1].bias = None
         self.features = features
 
 
     def forward(self, x):
         out = self.features(x)
         return out
-
-
-if __name__ == "__main__":
-    main()

@@ -13,13 +13,14 @@ import torch.nn.functional as F
 import time
 import random
 from torch.utils.tensorboard import SummaryWriter
+import argparse
 
 # Determine constants
 cuda = torch.cuda.is_available()
 NUM_WORKERS = os.cpu_count() if cuda else 0
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 BATCH_SIZE = 16 if cuda else 3
-DATASET_LENGTH = 1000 if cuda else 1
+DATASET_LENGTH = 4000 if cuda else 1
 NUM_EPOCHS = 10000
 LR = 1e-3
 LAMBD_STYLE = 0.1
@@ -42,6 +43,9 @@ writer.add_text('lambd style', str(LAMBD_STYLE), 0)
 writer.add_text('lambd content', str(LAMBD_CONTENT), 0)
 
 def main():
+    global COCO_LABELS_PATH, SEED, BATCH_SIZE, COCO_LABELS_PATH, WIKIART_PATH,\
+            NUM_WORKERS, DEVICE, DATASET_LENGTH, LR, LAMBD_STYLE, COCO_PATH
+
     encoder = VGG19Encoder().to(DEVICE)
     decoder = Decoder().to(DEVICE)
     encoder.train()
@@ -65,11 +69,63 @@ def main():
     optimizer = torch.optim.Adam(params = decoder.parameters(), lr = LR)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience = 100,
                                                      verbose = True, threshold = 0)
+    saved_epoch = 0
+
+    parser = argparse.ArgumentParser(description='Train the model :)')
+    parser.add_argument('--checkpoint', type=str, default=None,
+                        help='file to load training from')
+    args = parser.parse_args()
+    if args.checkpoint is not None:
+
+        checkpoint = torch.load(args.checkpoint)
+
+        saved_epoch = checkpoint['epoch']
+        del checkpoint['epoch']
+        decoder.load_state_dict(checkpoint['decoder_state_dict'])
+        del checkpoint['decoder_state_dict']
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        del checkpoint['optimizer_state_dict']
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        del checkpoint['scheduler_state_dict']
+        print(f"Starting loss: {checkpoint['loss']}")
+        del checkpoint['loss']
+        NUM_WORKERS = checkpoint['num_workers']
+        del checkpoint['num_workers']
+        BATCH_SIZE = checkpoint['batch_size']
+        del checkpoint['batch_size']
+        NUM_EPOCHS = checkpoint['num_epochs']
+        del checkpoint['num_epochs']
+        LAMBD_STYLE = checkpoint['lambda_style']
+        del checkpoint['lambda_style']
+        SEED = checkpoint['seed'] + 13
+        del checkpoint['seed']
+        COCO_LABELS_PATH = checkpoint['coco_labels_path']
+        del checkpoint['coco_labels_path']
+        DATASET_LENGTH = checkpoint['dataset_length']
+        del checkpoint['dataset_length']
+        del checkpoint['lr']
+        COCO_PATH = checkpoint['coco_path']
+        del checkpoint['coco_path']
+        WIKIART_PATH = checkpoint['wiki_path']
+        del checkpoint['wiki_path']
+        LAMBD_CONTENT = checkpoint['lambda_content']
+        del checkpoint['lambda_content']
+        del checkpoint['device']
+
+        dataset = IterableStyleTransferDataset(COCO_PATH, COCO_LABELS_PATH,\
+                                       WIKIART_PATH, length = DATASET_LENGTH,
+                                       transform = transform, exclude_style = False,
+                                       rng_seed = SEED)
+
+        dataloader = DataLoader(dataset, batch_size = BATCH_SIZE,
+                                num_workers = NUM_WORKERS)
+        assert len(checkpoint) == 0, checkpoint
+
 
     run = time.time()
     os.makedirs(f"demo/{run}")
     loss = None
-    for epoch in range(NUM_EPOCHS):
+    for epoch in range(saved_epoch, NUM_EPOCHS):
         torch.save({
             'epoch': epoch,
             'decoder_state_dict': decoder.state_dict(),
@@ -113,12 +169,10 @@ def train_epoch_style_loss(encoder, decoder, dataloader, optimizer, epoch_num, w
 
         progress_bar.set_postfix({'epoch': f"{epoch_num}", 'loss': f"{total_loss / (i + 1):.2f}"})
 
-        if i % 300 == 0:
-            step = (num_iters // 300 + 1) * epoch_num + i // 300
-            if epoch_num % 5 == 0:
-                writer.add_image('style', prep_img_for_tb(style_image[0]), step)
-                writer.add_image('content', prep_img_for_tb(content_image[0]), step)
-                writer.add_image('stylized', prep_img_for_tb(stylized[0]), step)
+        if i == 0:
+            writer.add_image('style', prep_img_for_tb(style_image[0]), epoch_num)
+            writer.add_image('content', prep_img_for_tb(content_image[0]), epoch_num)
+            writer.add_image('stylized', prep_img_for_tb(stylized[0]), epoch_num)
 
         optimizer.step()
 
@@ -140,8 +194,7 @@ def prep_img_for_tb(image):
     return clamp
 
 
-def get_batch_style_transfer_loss(encoder, decoder, content_image, style_image,
-                                  lambds = LAMBD_STYLE, lambdc = LAMBD_CONTENT):
+def get_batch_style_transfer_loss(encoder, decoder, content_image, style_image):
     # assert content_image.shape == (g_batch_size, 3, 256, 256)
 
     style_features = encoder(style_image)
@@ -154,7 +207,7 @@ def get_batch_style_transfer_loss(encoder, decoder, content_image, style_image,
     style_loss = compute_style_loss(features_of_stylized, style_features)
     content_loss = compute_content_loss(features_of_stylized[-1], stylized_features)
 
-    return style_loss * lambds, content_loss * lambdc, stylized_images
+    return style_loss * LAMBD_STYLE, content_loss * LAMBD_CONTENT, stylized_images
 
 
 def create_stylized_images(decoder, content_features, style_features):

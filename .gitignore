@@ -5,6 +5,6 @@ dev_notebook.ipynb
 *.pt
 *.swp
 *.swo
-runs/
+runs*/
 demo/
 *.pt

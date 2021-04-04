@@ -15,9 +15,10 @@ from PIL import Image, ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
-def get_transforms():
-    return Compose([Resize((256, 256)), ToTensor()])
-    # return Compose([Resize((256, 256)), ToTensor()])
+def get_transforms(crop):
+    if crop:
+        return Compose([Resize(512), RandomCrop(256), ToTensor()])
+    return Compose([Resize(512), RandomCrop(512), ToTensor()])
 
 
 class IterableStyleTransferDataset(IterableDataset):
@@ -108,7 +109,6 @@ class StyleTransferDataset(Dataset):
 
     def __getitem__(self, idx):
         coco_idx, wiki_idx = self.indices[idx]
-        wiki_idx = self.indices[0][1]
 
         content_image = self.coco[coco_idx][0]
         if not self.exclude_style:

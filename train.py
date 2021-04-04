@@ -20,16 +20,18 @@ import argparse
 def main():
     global COCO_LABELS_PATH, SEED, BATCH_SIZE, COCO_LABELS_PATH, WIKIART_PATH,\
             NUM_WORKERS, DEVICE, DATASET_LENGTH, LR, LAMBD_STYLE, COCO_PATH, NUM_EPOCHS,\
-            LAMBD_CONTENT, LAMBD_STYLE
+            LAMBD_CONTENT, LAMBD_STYLE, CROP
     has_cuda = torch.cuda.is_available()
+    action='store_true'
     parser = argparse.ArgumentParser(description='Train the model :)')
     parser.add_argument('comment', type = str, help = 'run comment')
     parser.add_argument('--checkpoint', type = str, default=None,
                         help='file to load training from')
     parser.add_argument('--num-workers', type = int,
                         default = os.cpu_count() if has_cuda else 0)
-    parser.add_argument('--cpu', type = bool, default = not has_cuda)
-    parser.add_argument('--cuda', type = bool, default = has_cuda)
+    parser.add_argument('--cpu', default = not has_cuda, action='store_true')
+    parser.add_argument('--cuda', default = has_cuda, action='store_true')
+    parser.add_argument('--crop', default = False, action='store_true')
     parser.add_argument('--batch-size', type = int,
                         default = 16 if has_cuda else 2)
     parser.add_argument('--dataset-length', type = int,
@@ -62,6 +64,9 @@ def main():
         LAMBD_STYLE = args.lambda_style
         LAMBD_CONTENT = args.lambda_content
         SEED = args.seed
+        CROP = args.crop
+        torch.random.manual_seed(SEED)
+
         print(f"num_workers: {NUM_WORKERS}, device: {DEVICE}")
 
         COCO_PATH = args.coco_path
@@ -105,6 +110,8 @@ def main():
         LAMBD_CONTENT = checkpoint['lambda_content']
         del checkpoint['lambda_content']
         del checkpoint['device']
+        CROP = checkpoint['crop']
+        del checkpoint['crop']
 
         assert len(checkpoint) == 0, checkpoint
 
@@ -122,21 +129,26 @@ def main():
     print(decoder)
     print("Created models")
 
-    transform = get_transforms()
-    dataset = IterableStyleTransferDataset(COCO_PATH, COCO_LABELS_PATH,\
+    transform = get_transforms(CROP)
+    dataset = StyleTransferDataset(COCO_PATH, COCO_LABELS_PATH,\
                                    WIKIART_PATH, length = DATASET_LENGTH,
-                                   transform = transform, exclude_style = False,
-                                   rng_seed = SEED)
+                                   transform = transform, rng_seed = SEED)
+    transform = get_transforms(False)
+    val_dataset = StyleTransferDataset(COCO_PATH, COCO_LABELS_PATH,\
+                                   WIKIART_PATH, length = DATASET_LENGTH,
+                                   transform = transform, rng_seed = SEED)
 
     dataloader = DataLoader(dataset, batch_size = BATCH_SIZE, \
-                            num_workers = NUM_WORKERS)
+                            num_workers = NUM_WORKERS, shuffle = True)
+    val_dataloader = DataLoader(val_dataset, batch_size = 1, \
+                                num_workers = 1, shuffle = True)
     print("Created dataloader")
 
     optimizer = torch.optim.Adam(params = decoder.parameters(), lr = LR)
     if optimizer_state_dict is not None:
         optimizer.load_state_dict(optimizer_state_dict)
 
-    scheduler = ReduceLROnPlateau(optimizer, patience = 100,
+    scheduler = ReduceLROnPlateau(optimizer, patience = 30,
                                   verbose = True, threshold = 0)
     if scheduler_state_dict is not None:
         scheduler.load_state_dict(scheduler_state_dict)
@@ -175,8 +187,11 @@ def main():
                 'coco_labels_path': COCO_LABELS_PATH, 'wiki_path': WIKIART_PATH,
             }, f"demo/{run}/{epoch}.pt")
 
+        validate_style_loss(encoder, decoder, val_dataloader, epoch, writer)
+        print("Validated")
         loss = train_epoch_style_loss(encoder, decoder, dataloader, \
                                       optimizer, epoch, writer, run)
+        print("Trained")
         scheduler.step(loss)
 
 
@@ -205,7 +220,7 @@ def train_epoch_style_loss(encoder, decoder, dataloader,\
 
         optimizer.zero_grad()
         style_loss, content_loss, stylized = \
-                get_batch_style_transfer_loss(encoder, decoder, \
+                get_style_transfer_loss(encoder, decoder, \
                                               content_image, style_image)
         full_loss = style_loss + content_loss
         full_loss.backward()
@@ -214,14 +229,6 @@ def train_epoch_style_loss(encoder, decoder, dataloader,\
 
         progress_bar.set_postfix({'epoch': f"{epoch_num}",
                                   'loss': f"{total_loss / (i + 1):.2f}"})
-
-        if i == 0:
-            s_image = prep_img_for_tb(style_image[0])
-            writer.add_image('style', s_image, epoch_num)
-            c_image = prep_img_for_tb(content_image[0])
-            writer.add_image('content', c_image, epoch_num)
-            f_image = prep_img_for_tb(stylized[0])
-            writer.add_image('stylized', f_image, epoch_num)
 
         optimizer.step()
 
@@ -243,7 +250,7 @@ def prep_img_for_tb(image):
     return clamp
 
 
-def get_batch_style_transfer_loss(encoder, decoder, content_image, style_image):
+def get_style_transfer_loss(encoder, decoder, content_image, style_image):
     # assert content_image.shape == (g_batch_size, 3, 256, 256)
 
     style_features = encoder(style_image)
@@ -372,6 +379,27 @@ def show_tensor(tensor, num, run, info = ""):
     image[image < 0] = 0
     plt.imshow(image)
     plt.savefig(f"demo/{run}/{num}{info}.png")
+
+def validate_style_loss(encoder, decoder, dataloader, epoch_num, writer):
+    global g_batch_size
+
+    encoder.eval()
+    decoder.eval()
+
+    content_image, style_image = next(iter(dataloader))
+    content_image = content_image.to(DEVICE)
+    style_image = style_image.to(DEVICE)
+    g_batch_size, _, w, h = content_image.shape
+
+    _, _, stylized = get_style_transfer_loss(\
+                            encoder, decoder, content_image, style_image)
+
+    s_image = prep_img_for_tb(style_image[0])
+    writer.add_image('style', s_image, epoch_num)
+    c_image = prep_img_for_tb(content_image[0])
+    writer.add_image('content', c_image, epoch_num)
+    f_image = prep_img_for_tb(stylized[0])
+    writer.add_image('stylized', f_image, epoch_num)
 
 
 def train_epoch_reconstruct(encoder, decoder, dataloader, optimizer, epoch_num, writer, run):

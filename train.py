@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 from data import StyleTransferDataset, IterableStyleTransferDataset, get_transforms
 import torch
 import torch.optim as optim
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
 import time
@@ -15,72 +16,71 @@ import random
 from torch.utils.tensorboard import SummaryWriter
 import argparse
 
-# Determine constants
-cuda = torch.cuda.is_available()
-NUM_WORKERS = 1# os.cpu_count() if cuda else 0
-DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-BATCH_SIZE = 16 if cuda else 3
-DATASET_LENGTH = 1000 if cuda else 1
-NUM_EPOCHS = 10000
-LR = 1e-3
-LAMBD_STYLE = 1e1
-LAMBD_CONTENT = 1
-SEED = 3033157
-
-print(f"num_workers: {NUM_WORKERS}, device: {DEVICE}")
-
-COCO_PATH = "datasets/train2017"
-COCO_LABELS_PATH = "datasets/annotations/captions_train2017.json"
-WIKIART_PATH = "datasets/wikiart"
-
 
 def main():
     global COCO_LABELS_PATH, SEED, BATCH_SIZE, COCO_LABELS_PATH, WIKIART_PATH,\
             NUM_WORKERS, DEVICE, DATASET_LENGTH, LR, LAMBD_STYLE, COCO_PATH, NUM_EPOCHS,\
             LAMBD_CONTENT, LAMBD_STYLE
-
-    encoder = VGG19Encoder().to(DEVICE)
-    decoder = Decoder().to(DEVICE)
-    encoder.train()
-    decoder.train()
-    print(encoder)
-    print(decoder)
-    print("Created models")
-
-    transform = get_transforms()
-    dataset = IterableStyleTransferDataset(COCO_PATH, COCO_LABELS_PATH,\
-                                   WIKIART_PATH, length = DATASET_LENGTH,
-                                   transform = transform, exclude_style = False,
-                                   rng_seed = SEED)
-
-    dataloader = DataLoader(dataset, batch_size = BATCH_SIZE, \
-                            num_workers = NUM_WORKERS)
-    print("Created dataloader")
-
-    optimizer = torch.optim.Adam(params = decoder.parameters(), lr = LR)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience = 100,
-                                             verbose = True, threshold = 0)
-    saved_epoch = 0
-
+    has_cuda = torch.cuda.is_available()
     parser = argparse.ArgumentParser(description='Train the model :)')
-    parser.add_argument('comment', type=str, help='run comment')
-    parser.add_argument('--checkpoint', type=str, default=None,
+    parser.add_argument('comment', type = str, help = 'run comment')
+    parser.add_argument('--checkpoint', type = str, default=None,
                         help='file to load training from')
+    parser.add_argument('--num-workers', type = int,
+                        default = os.cpu_count() if has_cuda else 0)
+    parser.add_argument('--cpu', type = bool, default = not has_cuda)
+    parser.add_argument('--cuda', type = bool, default = has_cuda)
+    parser.add_argument('--batch-size', type = int,
+                        default = 16 if has_cuda else 2)
+    parser.add_argument('--dataset-length', type = int,
+                        default = 1000 if has_cuda else 1)
+    parser.add_argument('--num-epochs', type = int, default = 10000)
+    parser.add_argument('--save-freq', type = int, default = 10)
+    parser.add_argument('--lr', type = float, default = 1e-3)
+    parser.add_argument('--lambda-style', type = float, default = 10)
+    parser.add_argument('--lambda-content', type = float, default = 1)
+    parser.add_argument('--seed', type = int, default = 3033157)
+    parser.add_argument('--coco-path', type = str,
+                        default = "datasets/train2017")
+    parser.add_argument('--coco-labels-path', type = str,
+                        default = "datasets/annotations/captions_train2017.json")
+    parser.add_argument('--wikiart-path', type = str,
+                        default = "datasets/wikiart")
     args = parser.parse_args()
 
+    assert args.cpu != args.cuda
+    args.device = "cpu" if args.cpu else "cuda"
 
-    if args.checkpoint is not None:
+    if args.checkpoint is None:
+        NUM_WORKERS = args.num_workers
+        DEVICE = torch.device(args.device)
+        SAVE_FREQ = args.save_freq
+        BATCH_SIZE = args.batch_size
+        DATASET_LENGTH = args.dataset_length
+        NUM_EPOCHS = args.num_epochs
+        LR = args.lr
+        LAMBD_STYLE = args.lambda_style
+        LAMBD_CONTENT = args.lambda_content
+        SEED = args.seed
+        print(f"num_workers: {NUM_WORKERS}, device: {DEVICE}")
+
+        COCO_PATH = args.coco_path
+        COCO_LABELS_PATH = args.coco_labels_path
+        WIKIART_PATH = args.wikiart_path
+        optimizer_state_dict = None
+        scheduler_state_dict = None
+        decoder_state_dict = None
+    else:
+        assert len(vars(args)) == 1, \
+           "Cannot have multiple args if loading checkpoint."
 
         checkpoint = torch.load(args.checkpoint)
 
+        optimizer_state_dict = checkpoint['optimizer_state_dict']
+        scheduler_state_dict = checkpoint['scheduler_state_dict']
+        decoder_state_dict = checkpoint['decoder_state_dict']
         saved_epoch = checkpoint['epoch']
         del checkpoint['epoch']
-        decoder.load_state_dict(checkpoint['decoder_state_dict'])
-        del checkpoint['decoder_state_dict']
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        del checkpoint['optimizer_state_dict']
-        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-        del checkpoint['scheduler_state_dict']
         print(f"Starting loss: {checkpoint['loss']}")
         del checkpoint['loss']
         NUM_WORKERS = checkpoint['num_workers']
@@ -106,18 +106,48 @@ def main():
         del checkpoint['lambda_content']
         del checkpoint['device']
 
-        dataset = IterableStyleTransferDataset(COCO_PATH, COCO_LABELS_PATH,\
-                                       WIKIART_PATH, length = DATASET_LENGTH,
-                                       transform = transform, exclude_style = False,
-                                       rng_seed = SEED)
-
-        dataloader = DataLoader(dataset, batch_size = BATCH_SIZE,
-                                num_workers = NUM_WORKERS)
         assert len(checkpoint) == 0, checkpoint
+
+        print("Loading checkpoint, ignoring other args")
+
+    encoder = VGG19Encoder().to(DEVICE)
+    decoder = Decoder().to(DEVICE)
+    if decoder_state_dict is not None:
+        decoder.load_state_dict(decoder_state_dict)
+
+    encoder.train()
+    decoder.train()
+
+    print(encoder)
+    print(decoder)
+    print("Created models")
+
+    transform = get_transforms()
+    dataset = IterableStyleTransferDataset(COCO_PATH, COCO_LABELS_PATH,\
+                                   WIKIART_PATH, length = DATASET_LENGTH,
+                                   transform = transform, exclude_style = False,
+                                   rng_seed = SEED)
+
+    dataloader = DataLoader(dataset, batch_size = BATCH_SIZE, \
+                            num_workers = NUM_WORKERS)
+    print("Created dataloader")
+
+    optimizer = torch.optim.Adam(params = decoder.parameters(), lr = LR)
+    if optimizer_state_dict is not None:
+        optimizer.load_state_dict(optimizer_state_dict)
+
+    scheduler = ReduceLROnPlateau(optimizer, patience = 100,
+                                  verbose = True, threshold = 0)
+    if scheduler_state_dict is not None:
+        scheduler.load_state_dict(scheduler_state_dict)
+
+    saved_epoch = 0
+
 
     writer = SummaryWriter(comment = args.comment)
     writer.add_text('batch size', str(BATCH_SIZE), 0)
-    writer.add_text('is gpu ', str(cuda), 0)
+    writer.add_text('save freq', str(SAVE_FREQ), 0)
+    writer.add_text('is cuda ', str(args.cuda), 0)
     writer.add_text('dataset length ', str(DATASET_LENGTH), 0)
     writer.add_text('num workers ', str(NUM_WORKERS), 0)
     writer.add_text('num epochs ', str(NUM_EPOCHS), 0)
@@ -131,25 +161,27 @@ def main():
     os.makedirs(f"demo/{run}")
     loss = None
     for epoch in range(saved_epoch, NUM_EPOCHS):
-        torch.save({
-            'epoch': epoch,
-            'decoder_state_dict': decoder.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            'scheduler_state_dict': scheduler.state_dict(),
-            'loss': loss,
-            'num_workers': NUM_WORKERS, 'device': DEVICE,
-            'batch_size': BATCH_SIZE, 'dataset_length': DATASET_LENGTH,
-            'num_epochs': NUM_EPOCHS, 'lr': LR,
-            'lambda_style': LAMBD_STYLE, 'lambda_content': LAMBD_CONTENT,
-            'seed': SEED, 'coco_path': COCO_PATH,
-            'coco_labels_path': COCO_LABELS_PATH, 'wiki_path': WIKIART_PATH,
-        }, f"demo/{run}/{epoch}.pt")
+        if SAVE_FREQ != 0 and epoch % SAVE_FREQ == 0:
+            torch.save({
+                'decoder_state_dict': decoder.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
+                'epoch': epoch, 'loss': loss,
+                'num_workers': NUM_WORKERS, 'device': DEVICE,
+                'batch_size': BATCH_SIZE, 'dataset_length': DATASET_LENGTH,
+                'num_epochs': NUM_EPOCHS, 'lr': LR,
+                'lambda_style': LAMBD_STYLE, 'lambda_content': LAMBD_CONTENT,
+                'seed': SEED, 'coco_path': COCO_PATH,
+                'coco_labels_path': COCO_LABELS_PATH, 'wiki_path': WIKIART_PATH,
+            }, f"demo/{run}/{epoch}.pt")
 
-        loss = train_epoch_style_loss(encoder, decoder, dataloader, optimizer, epoch, writer, run)
+        loss = train_epoch_style_loss(encoder, decoder, dataloader, \
+                                      optimizer, epoch, writer, run)
         scheduler.step(loss)
 
 
-def train_epoch_style_loss(encoder, decoder, dataloader, optimizer, epoch_num, writer, run):
+def train_epoch_style_loss(encoder, decoder, dataloader,\
+                           optimizer, epoch_num, writer, run):
     global g_batch_size
 
     encoder.train()
@@ -162,27 +194,34 @@ def train_epoch_style_loss(encoder, decoder, dataloader, optimizer, epoch_num, w
         print(num_iters)
     print(num_iters)
 
-    progress_bar = tqdm.tqdm(enumerate(dataloader), total = num_iters, dynamic_ncols = True)
+    progress_bar = tqdm.tqdm(enumerate(dataloader),\
+                             total = num_iters, dynamic_ncols = True)
     for i, (content_image, style_image) in progress_bar:
 
-        content_image, style_image = content_image.to(DEVICE), style_image.to(DEVICE)
+        content_image = content_image.to(DEVICE)
+        style_image = style_image.to(DEVICE)
         g_batch_size, _, w, h = content_image.shape
         # assert content_image.shape == style_image.shape
 
         optimizer.zero_grad()
-        style_loss, content_loss, stylized = get_batch_style_transfer_loss(encoder, decoder, \
-                                                                           content_image, style_image)
+        style_loss, content_loss, stylized = \
+                get_batch_style_transfer_loss(encoder, decoder, \
+                                              content_image, style_image)
         full_loss = style_loss + content_loss
         full_loss.backward()
 
         total_loss += full_loss.item()
 
-        progress_bar.set_postfix({'epoch': f"{epoch_num}", 'loss': f"{total_loss / (i + 1):.2f}"})
+        progress_bar.set_postfix({'epoch': f"{epoch_num}",
+                                  'loss': f"{total_loss / (i + 1):.2f}"})
 
         if i == 0:
-            writer.add_image('style', prep_img_for_tb(style_image[0]), epoch_num)
-            writer.add_image('content', prep_img_for_tb(content_image[0]), epoch_num)
-            writer.add_image('stylized', prep_img_for_tb(stylized[0]), epoch_num)
+            s_image = prep_img_for_tb(style_image[0])
+            writer.add_image('style', s_image, epoch_num)
+            c_image = prep_img_for_tb(content_image[0])
+            writer.add_image('content', c_image, epoch_num)
+            f_image = prep_img_for_tb(stylized[0])
+            writer.add_image('stylized', f_image, epoch_num)
 
         optimizer.step()
 
@@ -210,14 +249,17 @@ def get_batch_style_transfer_loss(encoder, decoder, content_image, style_image):
     style_features = encoder(style_image)
     content_features = encoder(content_image)
 
-    stylized_images, stylized_features = create_stylized_images(decoder, content_features, style_features)
+    stylized_images, stylized_features =\
+                create_stylized_images(decoder, content_features, style_features)
 
     features_of_stylized = encoder(stylized_images)
 
     style_loss = compute_style_loss(features_of_stylized, style_features)
-    content_loss = compute_content_loss(features_of_stylized[-1], stylized_features)
+    content_loss = compute_content_loss(features_of_stylized[-1],\
+                                        stylized_features)
 
-    return style_loss * LAMBD_STYLE, content_loss * LAMBD_CONTENT, stylized_images
+    return style_loss * LAMBD_STYLE, content_loss * LAMBD_CONTENT,\
+                                     stylized_images
 
 
 def create_stylized_images(decoder, content_features, style_features):
@@ -252,7 +294,8 @@ def compute_content_loss(features_of_stylized, stylized_features):
 
     batch_size = features_of_stylized.shape[0]
 
-    content_loss = F.mse_loss(features_of_stylized, stylized_features, reduction = "none")
+    content_loss = \
+        F.mse_loss(features_of_stylized, stylized_features, reduction = "none")
     # assert content_loss.shape == (g_batch_size, 512, 32, 32), content_loss.shape
 
     content_loss = content_loss.view(batch_size, -1)
@@ -336,17 +379,23 @@ def train_epoch_reconstruct(encoder, decoder, dataloader, optimizer, epoch_num, 
     decoder.train()
 
     total_loss = 0
-    for i, content_image in tqdm.tqdm(enumerate(dataloader), total = len(dataloader), dynamic_ncols = True):
+    for i, content_image in tqdm.tqdm(enumerate(dataloader),\
+                                      total = len(dataloader),\
+                                      dynamic_ncols = True):
         content_image = content_image.to(DEVICE)
 
         optimizer.zero_grad()
         reconstruction = decoder(encoder(content_image)[-1])
 
         if i % 300 == 0:
-            show_tensor(reconstruction[0].detach().clone(), epoch_num, run, info = "recon1")
-            show_tensor(content_image[0].detach().clone(), epoch_num, run, info = "orgnl1")
-            show_tensor(reconstruction[1].detach().clone(), epoch_num, run, info = "recon2")
-            show_tensor(content_image[1].detach().clone(), epoch_num, run, info = "orgnl2")
+            show_tensor(reconstruction[0].detach().clone(),\
+                        epoch_num, run, info = "recon1")
+            show_tensor(content_image[0].detach().clone(),\
+                        epoch_num, run, info = "orgnl1")
+            show_tensor(reconstruction[1].detach().clone(),\
+                        epoch_num, run, info = "recon2")
+            show_tensor(content_image[1].detach().clone(),\
+                        epoch_num, run, info = "orgnl2")
 
         loss = F.mse_loss(content_image, reconstruction)
         loss.backward()
@@ -358,16 +407,6 @@ def train_epoch_reconstruct(encoder, decoder, dataloader, optimizer, epoch_num, 
     writer.add_scalar('Loss/train', total_loss, epoch_num)
     print(f"Epoch {epoch_num}, Loss {total_loss}")
     return total_loss
-
-
-def validate(encoder, decoder, dataloader):
-    encoder.eval(); decoder.eval()
-
-    with torch.no_grad():
-        for i, (content_image, style_image) in enumerate(dataloader):
-            content_image, style_image = content_image.to(DEVICE), style_image.to(DEVICE)
-
-    # TODO: Finish
 
 
 if __name__ == "__main__":

@@ -50,7 +50,7 @@ class IterableStyleTransferDataset(IterableDataset):
                 assert length > 0
             self.ilength = length
         else:
-            self.ilength = length
+            self.ilength = self.length
 
         return self
 
@@ -108,6 +108,7 @@ class StyleTransferDataset(Dataset):
 
     def __getitem__(self, idx):
         coco_idx, wiki_idx = self.indices[idx]
+        wiki_idx = self.indices[0][1]
 
         content_image = self.coco[coco_idx][0]
         if not self.exclude_style:

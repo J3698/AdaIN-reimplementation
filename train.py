@@ -75,15 +75,16 @@ def main():
         optimizer_state_dict = None
         scheduler_state_dict = None
         decoder_state_dict = None
+        saved_epoch = 0
     else:
-        assert len(vars(args)) == 1, \
-           "Cannot have multiple args if loading checkpoint."
-
         checkpoint = torch.load(args.checkpoint)
 
         optimizer_state_dict = checkpoint['optimizer_state_dict']
+        del checkpoint['optimizer_state_dict']
         scheduler_state_dict = checkpoint['scheduler_state_dict']
+        del checkpoint['scheduler_state_dict']
         decoder_state_dict = checkpoint['decoder_state_dict']
+        del checkpoint['decoder_state_dict']
         saved_epoch = checkpoint['epoch']
         del checkpoint['epoch']
         print(f"Starting loss: {checkpoint['loss']}")
@@ -102,6 +103,7 @@ def main():
         del checkpoint['coco_labels_path']
         DATASET_LENGTH = checkpoint['dataset_length']
         del checkpoint['dataset_length']
+        LR = checkpoint['lr']
         del checkpoint['lr']
         COCO_PATH = checkpoint['coco_path']
         del checkpoint['coco_path']
@@ -109,9 +111,20 @@ def main():
         del checkpoint['wiki_path']
         LAMBD_CONTENT = checkpoint['lambda_content']
         del checkpoint['lambda_content']
+        DEVICE = torch.device(checkpoint['device'])
+        if not torch.cuda.is_available():
+            DEVICE = torch.device('cpu')
         del checkpoint['device']
-        CROP = checkpoint['crop']
-        del checkpoint['crop']
+        if 'crop' in checkpoint:
+            CROP = checkpoint['crop']
+            del checkpoint['crop']
+        else:
+            CROP = True
+        if 'save_freq' in checkpoint:
+            SAVE_FREQ = checkpoint['save_freq']
+            del checkpoint['save_freq']
+        else:
+            SAVE_FREQ = 1
 
         assert len(checkpoint) == 0, checkpoint
 
@@ -153,7 +166,6 @@ def main():
     if scheduler_state_dict is not None:
         scheduler.load_state_dict(scheduler_state_dict)
 
-    saved_epoch = 0
 
 
     writer = SummaryWriter(comment = args.comment)
@@ -331,7 +343,8 @@ def compute_style_loss(features_of_stylized, style_features):
     """
 
     zipped_features = zip(features_of_stylized, style_features)
-    for feat_of_stylized, style_feat in zipped_features:
+    layer_lambdas = [1.8, 1.3, 0.9, 0.65]
+    for lamb, (feat_of_stylized, style_feat) in zip(layer_lambdas, zipped_features):
         stdevs1, means1 = calc_feature_stats_vectors(feat_of_stylized)
         stdevs2, means2 = calc_feature_stats_vectors(style_feat)
 
@@ -341,12 +354,12 @@ def compute_style_loss(features_of_stylized, style_features):
         stdev_loss_vector = stdev_loss_vector.view(g_batch_size, -1)
         stdev_losses = stdev_loss_vector.sum(-1) ** 0.5
         # assert stdev_losses.shape == (g_batch_size,)
-        style_loss += stdev_losses.mean()
+        style_loss += stdev_losses.mean() * lamb
 
         mean_loss_vector = mean_loss_vector.view(g_batch_size, -1)
         mean_losses = mean_loss_vector.sum(-1) ** 0.5
         # assert mean_losses.shape == (g_batch_size,)
-        style_loss += mean_losses.mean()
+        style_loss += mean_losses.mean() * lamb
 
     return style_loss
 

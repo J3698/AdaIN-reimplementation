@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from data import StyleTransferDataset, IterableStyleTransferDataset, get_transforms
 import torch
 import torch.optim as optim
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
 import time
@@ -39,7 +39,7 @@ def main():
     parser.add_argument('--num-epochs', type = int, default = 10000)
     parser.add_argument('--save-freq', type = int, default = 10)
     parser.add_argument('--lr', type = float, default = 1e-3)
-    parser.add_argument('--lambda-style', type = float, default = 10)
+    parser.add_argument('--lambda-style', type = float, default = 3.5e3)
     parser.add_argument('--lambda-content', type = float, default = 1)
     parser.add_argument('--seed', type = int, default = 3033157)
     parser.add_argument('--coco-path', type = str,
@@ -130,6 +130,12 @@ def main():
 
         print("Loading checkpoint, ignoring other args")
 
+
+    if args.lambda_style:
+        LAMBD_STYLE = args.lambda_style
+    if args.lr:
+        LR = args.lr
+
     encoder = VGG19Encoder().to(DEVICE)
     decoder = Decoder().to(DEVICE)
     if decoder_state_dict is not None:
@@ -160,9 +166,14 @@ def main():
     optimizer = torch.optim.Adam(params = decoder.parameters(), lr = LR)
     if optimizer_state_dict is not None:
         optimizer.load_state_dict(optimizer_state_dict)
+    if args.lr:
+        for i in optimizer.param_groups:
+            i['lr'] = args.lr
+        print(args.lr)
 
-    scheduler = ReduceLROnPlateau(optimizer, patience = 30,
-                                  verbose = True, threshold = 0)
+    #scheduler = ReduceLROnPlateau(optimizer, patience = 30,
+    #                              verbose = True, threshold = 0)
+    scheduler = StepLR(optimizer, step_size = 100, gamma = 0.1)
     if scheduler_state_dict is not None:
         scheduler.load_state_dict(scheduler_state_dict)
 
@@ -199,16 +210,15 @@ def main():
                 'coco_labels_path': COCO_LABELS_PATH, 'wiki_path': WIKIART_PATH,
             }, f"demo/{run}/{epoch}.pt")
 
-        validate_style_loss(encoder, decoder, val_dataloader, epoch, writer)
-        print("Validated")
         loss = train_epoch_style_loss(encoder, decoder, dataloader, \
-                                      optimizer, epoch, writer, run)
-        print("Trained")
-        scheduler.step(loss)
+                                      val_dataloader, optimizer,\
+                                      epoch, writer, run)
+        scheduler.step()
 
 
 def train_epoch_style_loss(encoder, decoder, dataloader,\
-                           optimizer, epoch_num, writer, run):
+                           val_dataloader, optimizer, \
+                           epoch_num, writer, run):
     global g_batch_size
 
     encoder.train()
@@ -245,6 +255,15 @@ def train_epoch_style_loss(encoder, decoder, dataloader,\
         optimizer.step()
 
         it = epoch_num * num_iters + i
+        if i % 500 == 0:
+        #if epoch_num % 20 == 0:
+            imgs_per_epoch = num_iters // 500
+            img_num = imgs_per_epoch * epoch_num + i // 500
+            validate_style_loss(encoder, decoder, val_dataloader, img_num, writer)
+            #validate_style_loss(encoder, decoder, val_dataloader, epoch_num, writer)
+            encoder.train()
+            decoder.train()
+
         writer.add_scalar('SLoss/train_it', style_loss.item(), it)
         writer.add_scalar('CLoss/train_it', content_loss.item(), it)
         writer.add_scalar('Loss/train_it', full_loss.item(), it)
@@ -334,8 +353,6 @@ def compute_style_loss(features_of_stylized, style_features):
                       (g_batch_size, 128, 128, 128),
                       (g_batch_size, 256, 64, 64),
                       (g_batch_size, 512, 32, 32) ], shapes
-
-    shapes = [i.shape for i in style_features]
     assert shapes == [(g_batch_size, 64, 256, 256),
                       (g_batch_size, 128, 128, 128),
                       (g_batch_size, 256, 64, 64),
@@ -343,8 +360,7 @@ def compute_style_loss(features_of_stylized, style_features):
     """
 
     zipped_features = zip(features_of_stylized, style_features)
-    layer_lambdas = [1.8, 1.3, 0.9, 0.65]
-    for lamb, (feat_of_stylized, style_feat) in zip(layer_lambdas, zipped_features):
+    for feat_of_stylized, style_feat in zipped_features:
         stdevs1, means1 = calc_feature_stats_vectors(feat_of_stylized)
         stdevs2, means2 = calc_feature_stats_vectors(style_feat)
 
@@ -352,14 +368,13 @@ def compute_style_loss(features_of_stylized, style_features):
         mean_loss_vector = F.mse_loss(means1, means2, reduction = "none")
 
         stdev_loss_vector = stdev_loss_vector.view(g_batch_size, -1)
-        stdev_losses = stdev_loss_vector.sum(-1) ** 0.5
-        # assert stdev_losses.shape == (g_batch_size,)
-        style_loss += stdev_losses.mean() * lamb
+        stdev_losses = stdev_loss_vector.mean(-1)
 
         mean_loss_vector = mean_loss_vector.view(g_batch_size, -1)
-        mean_losses = mean_loss_vector.sum(-1) ** 0.5
+        mean_losses = mean_loss_vector.mean(-1)
+
+        style_loss += (mean_losses + stdev_losses).mean(-1)
         # assert mean_losses.shape == (g_batch_size,)
-        style_loss += mean_losses.mean() * lamb
 
     return style_loss
 

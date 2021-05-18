@@ -257,11 +257,9 @@ def train_epoch_style_loss(encoder, decoder, dataloader,\
         optimizer.step()
 
         it = epoch_num * num_iters + i
-        #if i % 500 == 0:
         if epoch_num % 20 == 0:
             imgs_per_epoch = num_iters // 500
             img_num = imgs_per_epoch * epoch_num + i // 500
-            #validate_style_loss(encoder, decoder, val_dataloader, img_num, writer)
             validate_style_loss(encoder, decoder, val_dataloader, epoch_num, writer)
             encoder.train()
             decoder.train()
@@ -269,7 +267,6 @@ def train_epoch_style_loss(encoder, decoder, dataloader,\
         writer.add_scalar('SLoss/train_it', style_loss.item(), it)
         writer.add_scalar('CLoss/train_it', content_loss.item(), it)
         writer.add_scalar('Loss/train_it', full_loss.item(), it)
-
 
 
     writer.add_scalar('Loss/train', total_loss, epoch_num)
@@ -300,14 +297,6 @@ def get_style_transfer_loss(encoder, decoder, content_image, style_image):
 
     return style_loss * LAMBD_STYLE, content_loss * LAMBD_CONTENT,\
                                      stylized_images
-
-
-def style_transfer(encoder, decoder, content_image, style_image):
-    style_features = encoder(style_image)
-    content_features = encoder(content_image)
-    stylized_features = adain(content_features[-1], style_features[-1])
-    stylized_images = decoder(stylized_features)
-    return stylized_images
 
 
 def create_stylized_images(decoder, content_features, style_features):
@@ -410,37 +399,6 @@ def calc_feature_stats_vectors(features):
     feature_means = feature_means.reshape(batch_size, feature_maps)
 
     return feature_stdevs, feature_means
-
-
-def show_tensor(tensor, num, run, info = ""):
-    if info != "":
-        info = "-" + info
-
-    image = tensor.cpu().squeeze().permute(1, 2, 0).numpy()
-    image[image > 1] = 1
-    image[image < 0] = 0
-    plt.imshow(image)
-    plt.savefig(f"demo/{run}/{num}{info}.png")
-
-def validate_style_loss(encoder, decoder, dataloader, epoch_num, writer):
-    global g_batch_size
-
-    encoder.eval()
-    decoder.eval()
-
-    content_image, style_image = next(iter(dataloader))
-    content_image = content_image.to(DEVICE)
-    style_image = style_image.to(DEVICE)
-    g_batch_size, _, w, h = content_image.shape
-
-    stylized = style_transfer(encoder, decoder, content_image, style_image)
-
-    s_image = prep_img_for_tb(style_image[0])
-    writer.add_image('style', s_image, epoch_num)
-    c_image = prep_img_for_tb(content_image[0])
-    writer.add_image('content', c_image, epoch_num)
-    f_image = prep_img_for_tb(stylized[0])
-    writer.add_image('stylized', f_image, epoch_num)
 
 
 

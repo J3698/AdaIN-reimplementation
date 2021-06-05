@@ -13,7 +13,7 @@ def main():
 
 
 def test_data():
-    transforms = get_transforms()
+    transforms = get_transforms(True)
 
     coco_path = "datasets/train2017"
     coco_annot = "datasets/annotations/captions_train2017.json"
@@ -98,7 +98,7 @@ def test_encoder():
 def test_decoder():
     encoder = VGG19Encoder()
     decoder = Decoder()
-    print(decoder)
+
 
     sample_input = torch.ones((2, 3, 256, 256))
     outputs = encoder(sample_input)

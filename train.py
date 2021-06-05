@@ -9,218 +9,47 @@ from data import StyleTransferDataset, IterableStyleTransferDataset, get_transfo
 import torch
 import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
-import matplotlib.pyplot as plt
 import torch.nn.functional as F
 import time
 import random
 from torch.utils.tensorboard import SummaryWriter
-import argparse
+from validate import validate_style_loss
 
 
-def main():
-    global COCO_LABELS_PATH, SEED, BATCH_SIZE, COCO_LABELS_PATH, WIKIART_PATH,\
-            NUM_WORKERS, DEVICE, DATASET_LENGTH, LR, LAMBD_STYLE, COCO_PATH, NUM_EPOCHS,\
-            LAMBD_CONTENT, LAMBD_STYLE, CROP
-    has_cuda = torch.cuda.is_available()
-    action='store_true'
-    parser = argparse.ArgumentParser(description='Train the model :)')
-    parser.add_argument('comment', type = str, help = 'run comment')
-    parser.add_argument('--checkpoint', type = str, default=None,
-                        help='file to load training from')
-    parser.add_argument('--num-workers', type = int,
-                        default = os.cpu_count() if has_cuda else 0)
-    parser.add_argument('--cpu', default = not has_cuda, action='store_true')
-    parser.add_argument('--cuda', default = has_cuda, action='store_true')
-    parser.add_argument('--crop', default = False, action='store_true')
-    parser.add_argument('--batch-size', type = int,
-                        default = 16 if has_cuda else 2)
-    parser.add_argument('--dataset-length', type = int,
-                        default = 1000 if has_cuda else 1)
-    parser.add_argument('--num-epochs', type = int, default = 10000)
-    parser.add_argument('--save-freq', type = int, default = 10)
-    parser.add_argument('--lr', type = float, default = 1e-3)
-    parser.add_argument('--lambda-style', type = float, default = 30)
-    parser.add_argument('--lambda-content', type = float, default = 1)
-    parser.add_argument('--seed', type = int, default = 3033157)
-    parser.add_argument('--coco-path', type = str,
-                        default = "datasets/train2017")
-    parser.add_argument('--coco-labels-path', type = str,
-                        default = "datasets/annotations/captions_train2017.json")
-    parser.add_argument('--wikiart-path', type = str,
-                        default = "datasets/wikiart")
-    parser.add_argument('--scheduler-step', type = int,
-                        default = 200)
-    args = parser.parse_args()
+def train(encoder, decoder, dataloader, val_dataloader, optimizer, \
+          scheduler, args, writer, saved_epoch, run, device):
+    global gwriter
+    gwriter = writer
 
-    assert args.cpu != args.cuda
-    args.device = "cpu" if args.cpu else "cuda"
-
-    if args.checkpoint is None:
-        NUM_WORKERS = args.num_workers
-        SCHEDULER_STEP = args.scheduler_step
-        DEVICE = torch.device(args.device)
-        SAVE_FREQ = args.save_freq
-        BATCH_SIZE = args.batch_size
-        DATASET_LENGTH = args.dataset_length
-        NUM_EPOCHS = args.num_epochs
-        LR = args.lr
-        LAMBD_STYLE = args.lambda_style
-        LAMBD_CONTENT = args.lambda_content
-        SEED = args.seed
-        CROP = args.crop
-        torch.random.manual_seed(SEED)
-
-        print(f"num_workers: {NUM_WORKERS}, device: {DEVICE}")
-
-        COCO_PATH = args.coco_path
-        COCO_LABELS_PATH = args.coco_labels_path
-        WIKIART_PATH = args.wikiart_path
-        optimizer_state_dict = None
-        scheduler_state_dict = None
-        decoder_state_dict = None
-        saved_epoch = 0
-    else:
-        checkpoint = torch.load(args.checkpoint)
-
-        optimizer_state_dict = checkpoint['optimizer_state_dict']
-        del checkpoint['optimizer_state_dict']
-        scheduler_state_dict = checkpoint['scheduler_state_dict']
-        del checkpoint['scheduler_state_dict']
-        decoder_state_dict = checkpoint['decoder_state_dict']
-        del checkpoint['decoder_state_dict']
-        saved_epoch = checkpoint['epoch']
-        del checkpoint['epoch']
-        print(f"Starting loss: {checkpoint['loss']}")
-        del checkpoint['loss']
-        NUM_WORKERS = checkpoint['num_workers']
-        del checkpoint['num_workers']
-        BATCH_SIZE = checkpoint['batch_size']
-        del checkpoint['batch_size']
-        NUM_EPOCHS = checkpoint['num_epochs']
-        del checkpoint['num_epochs']
-        LAMBD_STYLE = checkpoint['lambda_style']
-        del checkpoint['lambda_style']
-        SEED = checkpoint['seed'] + 1
-        del checkpoint['seed']
-        COCO_LABELS_PATH = checkpoint['coco_labels_path']
-        del checkpoint['coco_labels_path']
-        DATASET_LENGTH = checkpoint['dataset_length']
-        del checkpoint['dataset_length']
-        LR = checkpoint['lr']
-        del checkpoint['lr']
-        COCO_PATH = checkpoint['coco_path']
-        del checkpoint['coco_path']
-        WIKIART_PATH = checkpoint['wiki_path']
-        del checkpoint['wiki_path']
-        LAMBD_CONTENT = checkpoint['lambda_content']
-        del checkpoint['lambda_content']
-        DEVICE = torch.device(checkpoint['device'])
-        if not torch.cuda.is_available():
-            DEVICE = torch.device('cpu')
-        del checkpoint['device']
-        if 'crop' in checkpoint:
-            CROP = checkpoint['crop']
-            del checkpoint['crop']
-        else:
-            CROP = True
-        if 'save_freq' in checkpoint:
-            SAVE_FREQ = checkpoint['save_freq']
-            del checkpoint['save_freq']
-        else:
-            SAVE_FREQ = 1
-
-        assert len(checkpoint) == 0, checkpoint
-
-        print("Loading checkpoint, ignoring other args")
-
-
-    if args.lambda_style:
-        LAMBD_STYLE = args.lambda_style
-    if args.lr:
-        LR = args.lr
-
-    encoder = VGG19Encoder().to(DEVICE)
-    decoder = Decoder().to(DEVICE)
-    if decoder_state_dict is not None:
-        decoder.load_state_dict(decoder_state_dict)
-
-    encoder.train()
-    decoder.train()
-
-    print(encoder)
-    print(decoder)
-    print("Created models")
-
-    transform = get_transforms(CROP)
-    dataset = StyleTransferDataset(COCO_PATH, COCO_LABELS_PATH,\
-                                   WIKIART_PATH, length = DATASET_LENGTH,
-                                   transform = transform, rng_seed = SEED)
-    transform = get_transforms(False)
-    val_dataset = StyleTransferDataset(COCO_PATH, COCO_LABELS_PATH,\
-                                   WIKIART_PATH, length = DATASET_LENGTH,
-                                   transform = transform, rng_seed = SEED)
-
-    dataloader = DataLoader(dataset, batch_size = BATCH_SIZE, \
-                            num_workers = NUM_WORKERS, shuffle = True)
-    val_dataloader = DataLoader(val_dataset, batch_size = 1, \
-                                num_workers = 1, shuffle = True)
-    print("Created dataloader")
-
-    if args.lr:
-        LR = args.lr
-    optimizer = torch.optim.Adam(params = decoder.parameters(), lr = LR)
-    if optimizer_state_dict is not None:
-        optimizer.load_state_dict(optimizer_state_dict)
-
-    #scheduler = ReduceLROnPlateau(optimizer, patience = 30,
-    #                              verbose = True, threshold = 0)
-    scheduler = StepLR(optimizer, step_size = args.scheduler_step,\
-                       gamma = 0.1)
-    if scheduler_state_dict is not None:
-        scheduler.load_state_dict(scheduler_state_dict)
-
-
-
-    writer = SummaryWriter(comment = args.comment)
-    writer.add_text('batch size', str(BATCH_SIZE), 0)
-    writer.add_text('save freq', str(SAVE_FREQ), 0)
-    writer.add_text('is cuda ', str(args.cuda), 0)
-    writer.add_text('dataset length ', str(DATASET_LENGTH), 0)
-    writer.add_text('num workers ', str(NUM_WORKERS), 0)
-    writer.add_text('num epochs ', str(NUM_EPOCHS), 0)
-    writer.add_text('lambd style', str(LAMBD_STYLE), 0)
-    writer.add_text('lambd content', str(LAMBD_CONTENT), 0)
-    writer.add_text('encoder', repr(encoder), 0)
-    writer.add_text('decoder', repr(decoder), 0)
-    writer.add_text('lr', str(LR), 0)
-
-    run = time.time()
-    os.makedirs(f"demo/{run}")
     loss = None
-    for epoch in range(saved_epoch, NUM_EPOCHS):
-        if SAVE_FREQ != 0 and epoch % SAVE_FREQ == 0 and False:
+    for epoch in range(saved_epoch, args.num_epochs):
+        if args.save_freq != 0 and epoch % args.save_freq == 0 and False:
             torch.save({
                 'decoder_state_dict': decoder.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'scheduler_state_dict': scheduler.state_dict(),
                 'epoch': epoch, 'loss': loss,
-                'num_workers': NUM_WORKERS, 'device': DEVICE,
-                'batch_size': BATCH_SIZE, 'dataset_length': DATASET_LENGTH,
-                'num_epochs': NUM_EPOCHS, 'lr': LR,
-                'lambda_style': LAMBD_STYLE, 'lambda_content': LAMBD_CONTENT,
-                'seed': SEED, 'coco_path': COCO_PATH,
-                'coco_labels_path': COCO_LABELS_PATH, 'wiki_path': WIKIART_PATH,
+                'num_workers': args.num_workers, 'device': device,
+                'batch_size': args.batch_size,
+                'dataset_length': args.dataset_length,
+                'num_epochs': args.num_epochs, 'lr': args.lr,
+                'lambda_style': args.lambda_style,
+                'lambda_content': args.lambda_content,
+                'seed': args.seed, 'coco_path': args.coco_path,
+                'coco_labels_path': args.coco_labels_path,
+                'wiki_path': args.wikiart_path,
             }, f"demo/{run}/{epoch}.pt")
 
-        loss = train_epoch_style_loss(encoder, decoder, dataloader, \
+        loss = train_epoch_style_loss(args, encoder, decoder, dataloader, \
                                       val_dataloader, optimizer,\
-                                      epoch, writer, run)
+                                      epoch, writer, run, device)
+
         scheduler.step()
 
 
-def train_epoch_style_loss(encoder, decoder, dataloader,\
+def train_epoch_style_loss(args, encoder, decoder, dataloader,\
                            val_dataloader, optimizer, \
-                           epoch_num, writer, run):
+                           epoch_num, writer, run, device):
     global g_batch_size
 
     encoder.train()
@@ -229,25 +58,34 @@ def train_epoch_style_loss(encoder, decoder, dataloader,\
     total_loss = 0
     num_iters = len(dataloader)
     if isinstance(dataloader.dataset, IterableStyleTransferDataset):
-        num_iters = ceil(len(dataloader) / BATCH_SIZE)
-        print(num_iters)
-    print(num_iters)
+        num_iters = ceil(len(dataloader) / args.batch_size)
 
     progress_bar = tqdm.tqdm(enumerate(dataloader),\
                              total = num_iters, dynamic_ncols = True)
+    last_val = 0
     for i, (content_image, style_image) in progress_bar:
+        global it
+        it = epoch_num * num_iters + i
 
-        content_image = content_image.to(DEVICE)
-        style_image = style_image.to(DEVICE)
+        content_image = content_image.to(device)
+        style_image = style_image.to(device)
         g_batch_size, _, w, h = content_image.shape
-        # assert content_image.shape == style_image.shape
+        assert_shape(content_image, style_image.shape)
 
         optimizer.zero_grad()
         style_loss, content_loss, stylized = \
                 get_style_transfer_loss(encoder, decoder, \
-                                              content_image, style_image)
+                                        content_image, style_image,\
+                                        args.lambda_content, args.lambda_style)
+
+
+
+        if epoch_num == 0 and 10 < i < 30:
+            plot_grad(style_loss, content_loss, decoder, optimizer, writer, i)
+
         full_loss = style_loss + content_loss
         full_loss.backward()
+
 
         total_loss += full_loss.item()
 
@@ -256,11 +94,13 @@ def train_epoch_style_loss(encoder, decoder, dataloader,\
 
         optimizer.step()
 
-        it = epoch_num * num_iters + i
-        if epoch_num % 20 == 0:
+        if it % 100 == 0:
+            print("validating")
+            # == 0 and (torch.cuda.is_available() or epoch_num % 20 == 0):
             imgs_per_epoch = num_iters // 500
             img_num = imgs_per_epoch * epoch_num + i // 500
-            validate_style_loss(encoder, decoder, val_dataloader, epoch_num, writer)
+            validate_style_loss(encoder, decoder, val_dataloader,\
+                                epoch_num, writer, device)
             encoder.train()
             decoder.train()
 
@@ -268,20 +108,25 @@ def train_epoch_style_loss(encoder, decoder, dataloader,\
         writer.add_scalar('CLoss/train_it', content_loss.item(), it)
         writer.add_scalar('Loss/train_it', full_loss.item(), it)
 
-
     writer.add_scalar('Loss/train', total_loss, epoch_num)
     return total_loss
 
-def prep_img_for_tb(image):
-    copy = image.cpu().detach().clone()
-    clamp = torch.clamp(copy, 0, 1)
-    # assert clamp.shape == (3, 256, 256)
+def plot_grad(style_loss, content_loss, decoder, optimizer, writer, it):
+    optimizer.zero_grad()
+    style_loss.backward(retain_graph = True)
+    for tag, param in decoder.named_parameters():
+         writer.add_histogram(f"style {tag}", param.grad.data.cpu().numpy(), it)
 
-    return clamp
+    optimizer.zero_grad()
+    content_loss.backward(retain_graph = True)
+    for tag, param in decoder.named_parameters():
+         writer.add_histogram(f"content {tag}", param.grad.data.cpu().numpy(), it)
 
+    optimizer.zero_grad()
 
-def get_style_transfer_loss(encoder, decoder, content_image, style_image):
-    assert content_image.shape == (g_batch_size, 3, 256, 256)
+def get_style_transfer_loss(encoder, decoder, content_image, style_image,\
+                            lambda_content, lambda_style):
+    assert_shape(content_image, (g_batch_size, 3, 256, 256))
 
     style_features = encoder(style_image)
     content_features = encoder(content_image)
@@ -295,89 +140,71 @@ def get_style_transfer_loss(encoder, decoder, content_image, style_image):
     content_loss = compute_content_loss(features_of_stylized[-1],\
                                         stylized_features)
 
-    return style_loss * LAMBD_STYLE, content_loss * LAMBD_CONTENT,\
+    return style_loss * lambda_style, content_loss * lambda_content,\
                                      stylized_images
 
 
 def create_stylized_images(decoder, content_features, style_features):
-    assert len(content_features) == 4
-    assert len(style_features) == 4
-
-    shapes = [i.shape for i in content_features]
-    assert shapes == [(g_batch_size, 64, 256, 256),
-                      (g_batch_size, 128, 128, 128),
-                      (g_batch_size, 256, 64, 64),
-                      (g_batch_size, 512, 32, 32) ], shapes
-    shapes = [i.shape for i in style_features]
-    assert shapes == [(g_batch_size, 64, 256, 256),
-                      (g_batch_size, 128, 128, 128),
-                      (g_batch_size, 256, 64, 64),
-                      (g_batch_size, 512, 32, 32) ], shapes
+    shapes = [(g_batch_size, 64, 256, 256), (g_batch_size, 128, 128, 128),\
+              (g_batch_size, 256, 64, 64), (g_batch_size, 512, 32, 32)]
+    shapes1 = [i.shape for i in content_features]
+    shapes2 = [i.shape for i in style_features]
+    assert shapes == shapes1 
+    assert shapes == shapes2
 
     stylized_features = adain(content_features[-1], style_features[-1])
-    assert stylized_features.shape == (g_batch_size, 512, 32, 32), stylized_features.shape
+    assert_shape(stylized_features, (g_batch_size, 512, 32, 32))
 
     stylized_images = decoder(stylized_features)
-    assert stylized_images.shape == (g_batch_size, 3, 256, 256)
+    assert_shape(stylized_images, (g_batch_size, 3, 256, 256))
 
     return stylized_images, stylized_features
 
 
 def compute_content_loss(features_of_stylized, stylized_features):
-    assert features_of_stylized.shape == (g_batch_size, 512, 32, 32)
-    assert stylized_features.shape == (g_batch_size, 512, 32, 32)
-
-    batch_size = features_of_stylized.shape[0]
+    assert_shape(features_of_stylized, (g_batch_size, 512, 32, 32))
+    assert_shape(stylized_features, (g_batch_size, 512, 32, 32))
 
     content_loss = \
-        F.mse_loss(features_of_stylized, stylized_features, reduction = "none")
-    assert content_loss.shape == (g_batch_size, 512, 32, 32), content_loss.shape
+        F.mse_loss(features_of_stylized, stylized_features, reduction = "sum")
+    assert_shape(content_loss, ())
 
-    content_loss = content_loss.view(batch_size, -1)
-    assert content_loss.shape == (batch_size, 512 * 32 * 32)
-
-    content_loss = content_loss.sum(-1) ** 0.5
-    assert content_loss.shape == (batch_size,)
-    return content_loss.mean()
+    return content_loss
 
 
 def compute_style_loss(features_of_stylized, style_features):
+    shapes = [(g_batch_size, 64, 256, 256), (g_batch_size, 128, 128, 128),\
+              (g_batch_size, 256, 64, 64), (g_batch_size, 512, 32, 32)]
+    shapes1 = [i.shape for i in features_of_stylized]
+    shapes2 = [i.shape for i in style_features]
+    assert shapes == shapes1 
+    assert shapes == shapes2
+
     style_loss = 0
-
-    shapes = [i.shape for i in features_of_stylized]
-    assert shapes == [(g_batch_size, 64, 256, 256),
-                      (g_batch_size, 128, 128, 128),
-                      (g_batch_size, 256, 64, 64),
-                      (g_batch_size, 512, 32, 32) ], shapes
-
-    shapes = [i.shape for i in style_features]
-    assert shapes == [(g_batch_size, 64, 256, 256),
-                      (g_batch_size, 128, 128, 128),
-                      (g_batch_size, 256, 64, 64),
-                      (g_batch_size, 512, 32, 32) ], shapes
-
     zipped_features = zip(features_of_stylized, style_features)
-    for feat_of_stylized, style_feat in zipped_features:
+    for i, (feat_of_stylized, style_feat) in enumerate(zipped_features):
         feature_maps = feat_of_stylized.shape[1]
-        assert feat_of_stylized.shape == (g_batch_size, feature_maps,\
-                                          2 ** 14 / feature_maps, 2 ** 14 / feature_maps)
-        assert style_feat.shape == (g_batch_size, feature_maps,\
-                                    2 ** 14 / feature_maps, 2 ** 14 / feature_maps)
+        elems = 2 ** 14 / feature_maps
+        shape = (g_batch_size, feature_maps, elems, elems)
+        assert_shape(feat_of_stylized, shape)
+        assert_shape(style_feat, shape) 
 
         stdevs1, means1 = calc_feature_stats_vectors(feat_of_stylized)
         stdevs2, means2 = calc_feature_stats_vectors(style_feat)
-        assert stdevs1.shape == (g_batch_size, feature_maps)
-        assert stdevs2.shape == (g_batch_size, feature_maps)
-        assert means1.shape == (g_batch_size, feature_maps)
-        assert means2.shape == (g_batch_size, feature_maps)
+        assert_shape(stdevs1, (g_batch_size, feature_maps))
+        assert_shape(stdevs2, (g_batch_size, feature_maps))
+        assert_shape(means1, (g_batch_size, feature_maps))
+        assert_shape(means2, (g_batch_size, feature_maps))
 
-        stdev_loss_vector = F.mse_loss(stdevs1, stdevs2, reduction = "none") ** 0.5
-        mean_loss_vector = F.mse_loss(means1, means2, reduction = "none") ** 0.5
-        assert stdev_loss_vector.shape == (g_batch_size, feature_maps)
-        assert mean_loss_vector.shape == (g_batch_size, feature_maps)
+        stdev_loss_vector = F.mse_loss(stdevs1, stdevs2, reduction = "mean")
+        mean_loss_vector = F.mse_loss(means1, means2, reduction = "mean")
+        assert_shape(stdev_loss_vector, ())
+        assert_shape(mean_loss_vector, ())
 
-        style_loss += mean_loss_vector.sum(-1).mean()
-        style_loss += stdev_loss_vector.sum(-1).mean()
+
+        gwriter.add_scalar(f'SLoss/{i}-mlayer', mean_loss_vector.item(), it)
+        gwriter.add_scalar(f'SLoss/{i}-slayer', stdev_loss_vector.item(), it)
+        style_loss += mean_loss_vector + stdev_loss_vector
 
     return style_loss
 
@@ -392,8 +219,8 @@ def calc_feature_stats_vectors(features):
 
     feature_stdevs = features.var(-1, unbiased = False) ** 0.5
     feature_means = features.mean(-1)
-    assert feature_stdevs.shape == (batch_size * feature_maps,), feature_vars.shape
-    assert feature_means.shape == (batch_size * feature_maps,), feature_means.shape
+    assert_shape(feature_stdevs, (batch_size * feature_maps,))
+    assert_shape(feature_means, (batch_size * feature_maps,))
 
     feature_stdevs = feature_stdevs.reshape(batch_size, feature_maps)
     feature_means = feature_means.reshape(batch_size, feature_maps)
@@ -401,7 +228,7 @@ def calc_feature_stats_vectors(features):
     return feature_stdevs, feature_means
 
 
+def assert_shape(tensor, expected):
+    msg = f"expected {expected} actual {tensor.shape}"
+    assert tensor.shape == expected, msg
 
-
-if __name__ == "__main__":
-    main()

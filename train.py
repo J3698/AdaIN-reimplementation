@@ -182,6 +182,8 @@ def compute_style_loss(features_of_stylized, style_features):
 
     style_loss = 0
     zipped_features = zip(features_of_stylized, style_features)
+    scale = [1, 0.8, 0.6, 0.4]
+    #scale = [1, 1, 1, 1]
     for i, (feat_of_stylized, style_feat) in enumerate(zipped_features):
         feature_maps = feat_of_stylized.shape[1]
         elems = 2 ** 14 / feature_maps
@@ -196,8 +198,8 @@ def compute_style_loss(features_of_stylized, style_features):
         assert_shape(means1, (g_batch_size, feature_maps))
         assert_shape(means2, (g_batch_size, feature_maps))
 
-        stdev_loss_vector = F.mse_loss(stdevs1, stdevs2, reduction = "mean")
-        mean_loss_vector = F.mse_loss(means1, means2, reduction = "mean")
+        stdev_loss_vector = F.mse_loss(stdevs1, stdevs2, reduction = "mean") ** 0.5 * scale[i]
+        mean_loss_vector = F.mse_loss(means1, means2, reduction = "mean") ** 0.5 * scale[i]
         assert_shape(stdev_loss_vector, ())
         assert_shape(mean_loss_vector, ())
 

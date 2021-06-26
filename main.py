@@ -28,7 +28,7 @@ def main():
                         default = os.cpu_count() if has_cuda else 0)
     parser.add_argument('--cpu', default = not has_cuda, action='store_true')
     parser.add_argument('--cuda', default = has_cuda, action='store_true')
-    parser.add_argument('--crop', default = True, action='store_true')
+    parser.add_argument('--crop', default = False, action='store_true')
     parser.add_argument('--batch-size', type = int,
                         default = 16 if has_cuda else 2)
     parser.add_argument('--dataset-length', type = int,
@@ -37,7 +37,7 @@ def main():
     parser.add_argument('--save-freq', type = int, default = 10)
     parser.add_argument('--lr', type = float, default = 1e-3)
     parser.add_argument('--lambda-style', type = float, default = 5)
-    parser.add_argument('--lambda-content', type = float, default = 4e-7)
+    parser.add_argument('--lambda-content', type = float, default = 1e-4)
     parser.add_argument('--seed', type = int, default = 3033157)
     parser.add_argument('--coco-path', type = str,
                         default = "datasets/train2017")

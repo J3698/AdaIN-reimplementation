@@ -37,7 +37,7 @@ def train(encoder, decoder, dataloader, val_dataloader, optimizer, \
                 'lambda_content': args.lambda_content,
                 'seed': args.seed, 'coco_path': args.coco_path,
                 'coco_labels_path': args.coco_labels_path,
-                'wiki_path': args.wikiart_path,
+                'wiki_path': args.wikiart_path
             }, f"demo/{run}/{epoch}.pt")
 
         loss = train_epoch_style_loss(args, encoder, decoder, dataloader, \
@@ -52,7 +52,7 @@ def train_epoch_style_loss(args, encoder, decoder, dataloader,\
                            epoch_num, writer, run, device):
     global g_batch_size
 
-    encoder.train()
+    encoder.eval()
     decoder.train()
 
     total_loss = 0
@@ -94,14 +94,13 @@ def train_epoch_style_loss(args, encoder, decoder, dataloader,\
 
         optimizer.step()
 
-        if it % 100 == 0:
+        if it % args.save_freq == 0:
             print("validating")
             # == 0 and (torch.cuda.is_available() or epoch_num % 20 == 0):
             imgs_per_epoch = num_iters // 500
             img_num = imgs_per_epoch * epoch_num + i // 500
             validate_style_loss(encoder, decoder, val_dataloader,\
                                 epoch_num, writer, device)
-            encoder.train()
             decoder.train()
 
         writer.add_scalar('SLoss/train_it', style_loss.item(), it)
@@ -149,7 +148,7 @@ def create_stylized_images(decoder, content_features, style_features):
               (g_batch_size, 256, 64, 64), (g_batch_size, 512, 32, 32)]
     shapes1 = [i.shape for i in content_features]
     shapes2 = [i.shape for i in style_features]
-    assert shapes == shapes1 
+    assert shapes == shapes1
     assert shapes == shapes2
 
     stylized_features = adain(content_features[-1], style_features[-1])
@@ -177,7 +176,7 @@ def compute_style_loss(features_of_stylized, style_features):
               (g_batch_size, 256, 64, 64), (g_batch_size, 512, 32, 32)]
     shapes1 = [i.shape for i in features_of_stylized]
     shapes2 = [i.shape for i in style_features]
-    assert shapes == shapes1 
+    assert shapes == shapes1
     assert shapes == shapes2
 
     style_loss = 0
@@ -189,7 +188,7 @@ def compute_style_loss(features_of_stylized, style_features):
         elems = 2 ** 14 / feature_maps
         shape = (g_batch_size, feature_maps, elems, elems)
         assert_shape(feat_of_stylized, shape)
-        assert_shape(style_feat, shape) 
+        assert_shape(style_feat, shape)
 
         stdevs1, means1 = calc_feature_stats_vectors(feat_of_stylized)
         stdevs2, means2 = calc_feature_stats_vectors(style_feat)
@@ -204,8 +203,8 @@ def compute_style_loss(features_of_stylized, style_features):
         assert_shape(mean_loss_vector, ())
 
 
-        gwriter.add_scalar(f'SLoss/{i}-mlayer', mean_loss_vector.item(), it)
-        gwriter.add_scalar(f'SLoss/{i}-slayer', stdev_loss_vector.item(), it)
+        gwriter.add_scalar(f'Grads/{i}-mlayer', mean_loss_vector.item(), it)
+        gwriter.add_scalar(f'Grads/{i}-slayer', stdev_loss_vector.item(), it)
         style_loss += mean_loss_vector + stdev_loss_vector
 
     return style_loss

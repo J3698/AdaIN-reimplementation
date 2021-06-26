@@ -11,7 +11,7 @@ class VGG19Encoder(nn.Module):
 
     def extract_vgg19_pretrained_layers(self):
         # get pretrained model
-        features = torchvision.models.vgg19(pretrained=True, progress=True).features
+        features = torchvision.models.vgg19_bn(pretrained=True, progress=True).features
 
         # change to reflection
         for i in features:
@@ -19,10 +19,10 @@ class VGG19Encoder(nn.Module):
                 i.padding_mode = 'reflect'
 
         # get blocks of layers we want
-        feats1 = features[0:2]
-        feats2 = features[2:7]
-        feats3 = features[7:12]
-        feats4 = features[12:21]
+        feats1 = features[0:3]
+        feats2 = features[3:10]
+        feats3 = features[10:17]
+        feats4 = features[17:30]
 
         return feats1, feats2, feats3, feats4
 

@@ -18,7 +18,7 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 def get_transforms(crop):
     if crop:
         return Compose([Resize(512), RandomCrop(256), ToTensor()])
-    return Compose([Resize(512), RandomCrop(256), ToTensor()])
+    return Compose([Resize((256, 256)), ToTensor()])
 
 
 class IterableStyleTransferDataset(IterableDataset):

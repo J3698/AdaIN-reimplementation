@@ -23,7 +23,6 @@ class Decoder(nn.Module):
             elif isinstance(layer, nn.ReLU):
                 layer.inplace = False
 
-        # features[-1].bias = None
         self.features = features
 
 

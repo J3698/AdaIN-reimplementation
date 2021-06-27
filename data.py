@@ -33,7 +33,6 @@ class IterableStyleTransferDataset(IterableDataset):
         self.seed = rng_seed
         self.random = random.Random(rng_seed)
         print(length)
-        self.indices = [self.random_pair_of_indices() for i in range(length)]
 
 
     def random_pair_of_indices(self):
@@ -130,7 +129,3 @@ class StyleTransferDataset(Dataset):
             warnings.warn("Given transform does not convert images to tensors;"
                           "default collate may fail.", UserWarning)
 
-
-
-if __name__ == "__main__":
-    main()

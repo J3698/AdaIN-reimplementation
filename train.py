@@ -94,13 +94,14 @@ def train_epoch_style_loss(args, encoder, decoder, dataloader,\
 
         optimizer.step()
 
+        # if epoch_num % args.save_freq == 0 and i == 0:
         if it % args.save_freq == 0:
             print("validating")
             # == 0 and (torch.cuda.is_available() or epoch_num % 20 == 0):
             imgs_per_epoch = num_iters // 500
             img_num = imgs_per_epoch * epoch_num + i // 500
             validate_style_loss(encoder, decoder, val_dataloader,\
-                                epoch_num, writer, device)
+                                it, writer, device)
             decoder.train()
 
         writer.add_scalar('SLoss/train_it', style_loss.item(), it)
@@ -181,7 +182,6 @@ def compute_style_loss(features_of_stylized, style_features):
 
     style_loss = 0
     zipped_features = zip(features_of_stylized, style_features)
-    scale = [1, 0.8, 0.6, 0.4]
     #scale = [1, 1, 1, 1]
     for i, (feat_of_stylized, style_feat) in enumerate(zipped_features):
         feature_maps = feat_of_stylized.shape[1]
@@ -197,8 +197,8 @@ def compute_style_loss(features_of_stylized, style_features):
         assert_shape(means1, (g_batch_size, feature_maps))
         assert_shape(means2, (g_batch_size, feature_maps))
 
-        stdev_loss_vector = F.mse_loss(stdevs1, stdevs2, reduction = "mean") ** 0.5 * scale[i]
-        mean_loss_vector = F.mse_loss(means1, means2, reduction = "mean") ** 0.5 * scale[i]
+        stdev_loss_vector = F.mse_loss(stdevs1, stdevs2, reduction = "mean") ** 0.5
+        mean_loss_vector = F.mse_loss(means1, means2, reduction = "mean") ** 0.5
         assert_shape(stdev_loss_vector, ())
         assert_shape(mean_loss_vector, ())
 

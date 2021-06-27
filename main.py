@@ -36,7 +36,7 @@ def main():
     parser.add_argument('--num-epochs', type = int, default = 10000)
     parser.add_argument('--save-freq', type = int, default = 10)
     parser.add_argument('--lr', type = float, default = 1e-3)
-    parser.add_argument('--lambda-style', type = float, default = 5)
+    parser.add_argument('--lambda-style', type = float, default = 200)
     parser.add_argument('--lambda-content', type = float, default = 1e-4)
     parser.add_argument('--seed', type = int, default = 3033157)
     parser.add_argument('--coco-path', type = str,
@@ -118,15 +118,12 @@ def main():
     if decoder_state_dict is not None:
         decoder.load_state_dict(decoder_state_dict)
 
-    encoder.train()
-    decoder.train()
-
     print(encoder)
     print(decoder)
     print("Created models")
 
     transform = get_transforms(args.crop)
-    dataset = StyleTransferDataset(args.coco_path, args.coco_labels_path,\
+    dataset = IterableStyleTransferDataset(args.coco_path, args.coco_labels_path,\
                                    args.wikiart_path, length = args.dataset_length,
                                    transform = transform, rng_seed = args.seed)
     transform = get_transforms(False)
@@ -134,8 +131,12 @@ def main():
                                    args.wikiart_path, length = args.dataset_length,
                                    transform = transform, rng_seed = args.seed)
 
-    dataloader = DataLoader(dataset, batch_size = args.batch_size, \
-                            num_workers = args.num_workers, shuffle = True)
+    if isinstance(dataset, IterableStyleTransferDataset):
+        dataloader = DataLoader(dataset, batch_size = args.batch_size, \
+                                num_workers = args.num_workers)
+    else:
+        dataloader = DataLoader(dataset, batch_size = args.batch_size, \
+                                num_workers = args.num_workers, shuffle = True)
     val_dataloader = DataLoader(val_dataset, batch_size = 1, \
                                 num_workers = 1, shuffle = True)
     print("Created dataloader")

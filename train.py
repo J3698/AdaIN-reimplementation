@@ -22,13 +22,13 @@ def train(encoder, decoder, dataloader, val_dataloader, optimizer, \
     gwriter = writer
 
     loss = None
-    for epoch in range(saved_epoch, args.num_epochs):
-        if args.save_freq != 0 and epoch % args.save_freq == 0 and False:
+    for epoch_num in range(saved_epoch, args.num_epochs):
+        if args.save_freq != 0 and epoch_num % args.save_freq == 0 and False:
             torch.save({
                 'decoder_state_dict': decoder.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'scheduler_state_dict': scheduler.state_dict(),
-                'epoch': epoch, 'loss': loss,
+                'epoch': epoch_num, 'loss': loss,
                 'num_workers': args.num_workers, 'device': device,
                 'batch_size': args.batch_size,
                 'dataset_length': args.dataset_length,
@@ -38,77 +38,59 @@ def train(encoder, decoder, dataloader, val_dataloader, optimizer, \
                 'seed': args.seed, 'coco_path': args.coco_path,
                 'coco_labels_path': args.coco_labels_path,
                 'wiki_path': args.wikiart_path
-            }, f"demo/{run}/{epoch}.pt")
+            }, f"demo/{run}/{epoch_num}.pt")
 
         loss = train_epoch_style_loss(args, encoder, decoder, dataloader, \
                                       val_dataloader, optimizer,\
-                                      epoch, writer, run, device)
+                                      epoch_num, writer, run, device)
 
         scheduler.step()
 
 
-def train_epoch_style_loss(args, encoder, decoder, dataloader,\
-                           val_dataloader, optimizer, \
-                           epoch_num, writer, run, device):
-    global g_batch_size
-
+def train_epoch_style_loss(args, encoder, decoder, dataloader, val_dataloader,
+                           optimizer, epoch_num, writer, run, device):
     encoder.eval()
     decoder.train()
 
     total_loss = 0
-    num_iters = len(dataloader)
-    if isinstance(dataloader.dataset, IterableStyleTransferDataset):
-        num_iters = ceil(len(dataloader) / args.batch_size)
-
-    progress_bar = tqdm.tqdm(enumerate(dataloader),\
-                             total = num_iters, dynamic_ncols = True)
-    last_val = 0
+    num_batches = calc_num_batches(dataloader, args)
+    progress_bar = tqdm.tqdm(enumerate(dataloader), total = num_batches, dynamic_ncols = True)
     for i, (content_image, style_image) in progress_bar:
-        global it
-        it = epoch_num * num_iters + i
-
+        # mvoe to gpu
         content_image = content_image.to(device)
         style_image = style_image.to(device)
-        g_batch_size, _, w, h = content_image.shape
-        assert_shape(content_image, style_image.shape)
 
+        # training
         optimizer.zero_grad()
-        style_loss, content_loss, stylized = \
-                get_style_transfer_loss(encoder, decoder, \
-                                        content_image, style_image,\
-                                        args.lambda_content, args.lambda_style)
-
-
-
-        if epoch_num == 0 and 10 < i < 30:
-            plot_grad(style_loss, content_loss, decoder, optimizer, writer, i)
-
-        full_loss = style_loss + content_loss
-        full_loss.backward()
-
-
-        total_loss += full_loss.item()
-
-        progress_bar.set_postfix({'epoch': f"{epoch_num}",
-                                  'loss': f"{total_loss / (i + 1):.2f}"})
-
+        loss, stylized = get_style_transfer_loss(encoder, decoder, content_image, style_image, args.lambda_content, args.lambda_style)
+        loss.backward()
+        total_loss += loss.item()
         optimizer.step()
 
-        if it % args.save_freq == 0:
-            print("validating")
-            # == 0 and (torch.cuda.is_available() or epoch_num % 20 == 0):
-            imgs_per_epoch = num_iters // 500
-            img_num = imgs_per_epoch * epoch_num + i // 500
-            validate_style_loss(encoder, decoder, val_dataloader,\
-                                epoch_num, writer, device)
-            decoder.train()
-
-        writer.add_scalar('SLoss/train_it', style_loss.item(), it)
-        writer.add_scalar('CLoss/train_it', content_loss.item(), it)
-        writer.add_scalar('Loss/train_it', full_loss.item(), it)
+        # logging
+        iteration = epoch_num * num_batches + i
+        write_to_tensorboard(iteration, args, encoder, decoder, val_dataloader, writer, device)
+        progress_bar.set_postfix({'epoch': f"{epoch_num}", 'loss': f"{total_loss / (i + 1):.2f}"})
 
     writer.add_scalar('Loss/train', total_loss, epoch_num)
     return total_loss
+
+
+def write_to_tensorboard(iteration, encoder, decoder, val_dataloader, writer, device):
+    if it % args.save_freq == 0:
+        validate_style_loss(encoder, decoder, val_dataloader, it, writer, device)
+        decoder.train()
+
+    writer.add_scalar('SLoss/train_it', style_loss.item(), it)
+    writer.add_scalar('CLoss/train_it', content_loss.item(), it)
+    writer.add_scalar('Loss/train_it', full_loss.item(), it)
+
+
+def calc_num_batches(dataloader, args):
+    if isinstance(dataloader.dataset, IterableStyleTransferDataset):
+        return ceil(len(dataloader) / args.batch_size)
+    return len(dataloader)
+
 
 def plot_grad(style_loss, content_loss, decoder, optimizer, writer, it):
     optimizer.zero_grad()

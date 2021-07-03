@@ -6,35 +6,47 @@ import torch
 class VGG19Encoder(nn.Module):
     def __init__(self):
         super().__init__()
-        self.feats = nn.Sequential(*self.extract_vgg19_pretrained_layers())
+
+        self.blocks = self.load_pretrained_blocks()
+        self.use_reflection_padding_for_convs()
+        self.freeze_weights()
 
 
-    def extract_vgg19_pretrained_layers(self):
-        # get pretrained model
-        features = torchvision.models.vgg19_bn(pretrained=True, progress=True).features
+    def load_pretrained_blocks(self):
+        layers = torchvision.models.vgg19_bn(pretrained=True, progress=True).features
 
-        # change to reflection
-        for i in features:
-            if isinstance(i, nn.Conv2d):
-                i.padding_mode = 'reflect'
+        block1 = layers[0:3]
+        block2 = layers[3:10]
+        block3 = layers[10:17]
+        block4 = layers[17:30]
 
-        # get blocks of layers we want
-        feats1 = features[0:3]
-        feats2 = features[3:10]
-        feats3 = features[10:17]
-        feats4 = features[17:30]
+        return nn.Sequential(block1, block2, block3, block4)
 
-        return feats1, feats2, feats3, feats4
 
-    def freeze(self):
+    def use_reflection_padding_for_convs(self):
+        for block in self.layers:
+            for layer in block:
+                if isinstance(layer, nn.Conv2d):
+                    layer.padding_mode = 'reflect'
+
+
+    def freeze_weights(self):
         for i in self.parameters():
             i.requires_grad = False
+        super().eval()
+
 
     def forward(self, x):
-        # get the final output, along with
-        # necessary intermediate outputs
+        return self.calc_final_and_intermediate_outputs(x)
+
+
+    def calc_final_and_intermediate_outputs(self, x):
         outputs = []
         for block in self.feats:
             x = block(x)
             outputs.append(x)
         return outputs
+
+
+    def train(self):
+        raise Exception("Encoder should not be trained")

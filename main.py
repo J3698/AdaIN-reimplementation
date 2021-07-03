@@ -1,127 +1,74 @@
-from encoder import VGG19Encoder
-from train import train
-from decoder import Decoder
 import os
-from adain import adain
-from math import ceil
-import tqdm
-from torch.utils.data import DataLoader
-from data import StyleTransferDataset, IterableStyleTransferDataset, get_transforms
+import argparse
+import time
+
 import torch
 import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
-import torch.nn.functional as F
-import time
-import random
 from torch.utils.tensorboard import SummaryWriter
-import argparse
+from torch.utils.data import DataLoader
+
+from data import StyleTransferDataset, IterableStyleTransferDataset, get_transforms
+from train import train
+from adain_model import StyleTransferModel
 
 
 def main():
-    has_cuda = torch.cuda.is_available()
+    args = parse_arguments()
+    torch.random.manual_seed(args.seed)
 
+    print("Creating dataloaders")
+    dataloader, val_dataloader = create_dataloaders(args)
+
+    print("Creating model")
+    adain_model = StyleTransferModel.to(args.device)
+    print(adain_model)
+
+    print(f"Workers: {args.num_workers}")
+    print(f"Device: {args.device}")
+
+    optimizer = torch.optim.Adam(params = decoder.parameters(), lr = args.lr, weight_decay = 0)
+    scheduler = StepLR(optimizer, step_size = args.scheduler_step, gamma = args.scheduler_gamma)
+
+    writer = SummaryWriter(comment = args.comment)
+    log_settings(writer, args)
+
+    run = time.time()
+    os.makedirs(f"demo/{run}")
+
+    train(adain_model, dataloader, val_dataloader, optimizer,\
+          scheduler, args, writer, saved_epoch, run, args.device)
+
+
+def parse_arguments():
+    has_cuda = torch.cuda.is_available()
     parser = argparse.ArgumentParser(description='Train the model :)')
     parser.add_argument('comment', type = str, help = 'run comment')
-    parser.add_argument('--checkpoint', type = str, default=None,
-                        help='file to load training from')
-    parser.add_argument('--num-workers', type = int,
-                        default = os.cpu_count() if has_cuda else 0)
+    parser.add_argument('--num-workers', type = int, default = os.cpu_count() if has_cuda else 0)
     parser.add_argument('--cpu', default = not has_cuda, action='store_true')
     parser.add_argument('--cuda', default = has_cuda, action='store_true')
     parser.add_argument('--crop', default = False, action='store_true')
-    parser.add_argument('--batch-size', type = int,
-                        default = 16 if has_cuda else 2)
-    parser.add_argument('--dataset-length', type = int,
-                        default = 1000 if has_cuda else 1)
+    parser.add_argument('--batch-size', type = int, default = 16 if has_cuda else 2)
+    parser.add_argument('--dataset-length', type = int, default = 1000 if has_cuda else 1)
     parser.add_argument('--num-epochs', type = int, default = 10000)
-    parser.add_argument('--save-freq', type = int, default = 10)
-    parser.add_argument('--lr', type = float, default = 1e-3)
-    parser.add_argument('--lambda-style', type = float, default = 200)
-    parser.add_argument('--lambda-content', type = float, default = 1e-4)
+    parser.add_argument('--log-freq', type = int, default = 100)
+    parser.add_argument('--checkpoint-freq', type = int, default = 1)
+    parser.add_argument('--lr', type = float, default = 1e-5)
+    parser.add_argument('--lambda-style', type = float, default = 2e6)
     parser.add_argument('--seed', type = int, default = 3033157)
-    parser.add_argument('--coco-path', type = str,
-                        default = "datasets/train2017")
-    parser.add_argument('--coco-labels-path', type = str,
-                        default = "datasets/annotations/captions_train2017.json")
-    parser.add_argument('--wikiart-path', type = str,
-                        default = "datasets/wikiart")
-    parser.add_argument('--scheduler-step', type = int,
-                        default = 200)
+    parser.add_argument('--coco-path', type = str, default = "datasets/train2017")
+    parser.add_argument('--coco-labels-path', type = str, default = "datasets/annotations/captions_train2017.json")
+    parser.add_argument('--wikiart-path', type = str, default = "datasets/wikiart")
+    parser.add_argument('--scheduler-step', type = int, default = 15)
+    parser.add_argument('--scheduler-gamma', type = int, default = 0.1)
     args = parser.parse_args()
-
-    assert args.cpu != args.cuda
+    assert args.cpu != args.cuda, "Can't train on both cpu and gpu"
     args.device = "cpu" if args.cpu else "cuda"
 
-    saved_epoch = 0
-    optimizer_state_dict = None
-    scheduler_state_dict = None
-    decoder_state_dict = None
+    return args
 
-    if args.checkpoint is not None:
-        checkpoint = torch.load(args.checkpoint)
-        optimizer_state_dict = checkpoint['optimizer_state_dict']
-        del checkpoint['optimizer_state_dict']
-        scheduler_state_dict = checkpoint['scheduler_state_dict']
-        del checkpoint['scheduler_state_dict']
-        decoder_state_dict = checkpoint['decoder_state_dict']
-        del checkpoint['decoder_state_dict']
-        saved_epoch = checkpoint['epoch']
-        del checkpoint['epoch']
-        print(f"Starting loss: {checkpoint['loss']}")
-        del checkpoint['loss']
-        args.num_workers = checkpoint['num_workers']
-        del checkpoint['num_workers']
-        args.batch_size = checkpoint['batch_size']
-        del checkpoint['batch_size']
-        args.num_epochs = checkpoint['num_epochs']
-        del checkpoint['num_epochs']
-        args.lambda_style = checkpoint['lambda_style']
-        del checkpoint['lambda_style']
-        args.seed = checkpoint['seed'] + 1
-        del checkpoint['seed']
-        coco_labels_path = checkpoint['coco_labels_path']
-        del checkpoint['coco_labels_path']
-        dataset_length = checkpoint['dataset_length']
-        del checkpoint['dataset_length']
-        args.lr = checkpoint['lr']
-        del checkpoint['lr']
-        args.coco_path = checkpoint['coco_path']
-        del checkpoint['coco_path']
-        args.wikiart_path = checkpoint['wiki_path']
-        del checkpoint['wiki_path']
-        args.lambda_content = checkpoint['lambda_content']
-        del checkpoint['lambda_content']
-        device = torch.device(checkpoint['device'])
-        if not torch.cuda.is_available():
-            device = torch.device('cpu')
-        del checkpoint['device']
-        if 'crop' in checkpoint:
-            crop = checkpoint['crop']
-            del checkpoint['crop']
-        else:
-            crop = True
-        if 'save_freq' in checkpoint:
-            save_freq = checkpoint['save_freq']
-            del checkpoint['save_freq']
-        else:
-            save_freq = 1
 
-        assert len(checkpoint) == 0, checkpoint
-        print("Loading checkpoint, ignoring other args")
-
-    device = torch.device(args.device)
-    torch.random.manual_seed(args.seed)
-    print(f"num_workers: {args.num_workers}, device: {args.device}")
-
-    encoder = VGG19Encoder().to(device)
-    decoder = Decoder().to(device)
-    if decoder_state_dict is not None:
-        decoder.load_state_dict(decoder_state_dict)
-
-    print(encoder)
-    print(decoder)
-    print("Created models")
-
+def create_dataloaders(args):
     transform = get_transforms(args.crop)
     dataset = IterableStyleTransferDataset(args.coco_path, args.coco_labels_path,\
                                    args.wikiart_path, length = args.dataset_length,
@@ -130,43 +77,26 @@ def main():
     val_dataset = StyleTransferDataset(args.coco_path, args.coco_labels_path,\
                                    args.wikiart_path, length = args.dataset_length,
                                    transform = transform, rng_seed = args.seed)
-
     if isinstance(dataset, IterableStyleTransferDataset):
-        dataloader = DataLoader(dataset, batch_size = args.batch_size, \
-                                num_workers = args.num_workers)
+        dataloader = DataLoader(dataset, batch_size = args.batch_size, num_workers = args.num_workers)
     else:
-        dataloader = DataLoader(dataset, batch_size = args.batch_size, \
-                                num_workers = args.num_workers, shuffle = True)
-    val_dataloader = DataLoader(val_dataset, batch_size = 1, \
-                                num_workers = 1, shuffle = True)
-    print("Created dataloader")
+        dataloader = DataLoader(dataset, batch_size = args.batch_size, num_workers = args.num_workers, shuffle = True)
+    val_dataloader = DataLoader(val_dataset, batch_size = 1, num_workers = 1, shuffle = True)
 
-    optimizer = torch.optim.Adam(params = decoder.parameters(),
-                                 lr = args.lr, weight_decay = 0)
-    if optimizer_state_dict is not None:
-        optimizer.load_state_dict(optimizer_state_dict)
+    return dataloader, val_dataloader
 
-    scheduler = StepLR(optimizer, step_size = args.scheduler_step, gamma = 0.1)
-    if scheduler_state_dict is not None:
-        scheduler.load_state_dict(scheduler_state_dict)
 
-    writer = SummaryWriter(comment = args.comment)
+def log_settings(writer, args):
     writer.add_text('batch size', str(args.batch_size), 0)
     writer.add_text('save freq', str(args.save_freq), 0)
-    writer.add_text('is cuda ', str(args.cuda), 0)
-    writer.add_text('dataset length ', str(args.dataset_length), 0)
-    writer.add_text('num workers ', str(args.num_workers), 0)
-    writer.add_text('num epochs ', str(args.num_epochs), 0)
+    writer.add_text('is cuda', str(args.cuda), 0)
+    writer.add_text('dataset length', str(args.dataset_length), 0)
+    writer.add_text('num workers', str(args.num_workers), 0)
+    writer.add_text('num epochs', str(args.num_epochs), 0)
     writer.add_text('lambda style', str(args.lambda_style), 0)
-    writer.add_text('lambda content', str(args.lambda_content), 0)
-    writer.add_text('encoder', repr(encoder), 0)
-    writer.add_text('decoder', repr(decoder), 0)
+    writer.add_text('model', repr(adain_model), 0)
     writer.add_text('lr', str(args.lr), 0)
 
-    run = time.time()
-    os.makedirs(f"demo/{run}")
-
-    train(encoder, decoder, dataloader, val_dataloader, optimizer, scheduler, args, writer, saved_epoch, run, device)
 
 if __name__ == "__main__":
     main()

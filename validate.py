@@ -3,48 +3,25 @@ import torch
 import matplotlib.pyplot as plt
 
 
-def validate_style_loss(encoder, decoder, dataloader, epoch_num, writer, device):
-    global g_batch_size
-
-    encoder.eval()
-    decoder.eval()
+def validate_style_loss(adain_model, dataloader, epoch_num, writer, device):
+    adain_model.eval()
 
     content_image, style_image = next(iter(dataloader))
     content_image = content_image.to(device)
     style_image = style_image.to(device)
-    g_batch_size, _, w, h = content_image.shape
 
-    stylized = style_transfer(encoder, decoder, content_image, style_image)
+    stylized_sample = adain_model(content_image, style_image)[-1][0]
 
-    s_image = prep_img_for_tb(style_image[0])
-    writer.add_image('style', s_image, epoch_num)
-    c_image = prep_img_for_tb(content_image[0])
-    writer.add_image('content', c_image, epoch_num)
-    f_image = prep_img_for_tb(stylized[0])
-    writer.add_image('stylized', f_image, epoch_num)
+    style_image = prep_img_for_tensorboard(style_image)
+    content_image = prep_img_for_tensorboard(content_image)
+    stylized_image = prep_img_for_tensorboard(stylized)
 
-
-def show_tensor(tensor, num, run, info = ""):
-    if info != "":
-        info = "-" + info
-
-    image = tensor.cpu().squeeze().permute(1, 2, 0).numpy()
-    image[image > 1] = 1
-    image[image < 0] = 0
-    plt.imshow(image)
-    plt.savefig(f"demo/{run}/{num}{info}.png")
+    writer.add_image('style', style_image, epoch_num)
+    writer.add_image('content', content_image, epoch_num)
+    writer.add_image('stylized', stylized_image, epoch_num)
 
 
-def style_transfer(encoder, decoder, content_image, style_image):
-    style_features = encoder(style_image)
-    content_features = encoder(content_image)
-    stylized_features = adain(content_features[-1], style_features[-1])
-    stylized_images = decoder(stylized_features)
-    return stylized_images
+def prep_img_for_tensorboard(image):
+    image_copy = image.cpu().detach().clone()
+    return torch.clamp(image_copy, 0, 1)
 
-
-def prep_img_for_tb(image):
-    copy = image.cpu().detach().clone()
-    clamp = torch.clamp(copy, 0, 1)
-
-    return clamp

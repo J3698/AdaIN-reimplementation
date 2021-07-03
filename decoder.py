@@ -8,7 +8,7 @@ class Decoder(nn.Module):
         super().__init__()
 
         self.layers = self.load_base_architecture()
-        self.swap_maxpools_for_upsamples(self)
+        self.swap_maxpools_for_upsamples()
         self.initialize_and_swap_direction_of_conv_layers()
         self.make_relus_trainable()
 
@@ -35,7 +35,7 @@ class Decoder(nn.Module):
                 self.layers[i] = conv2d
 
 
-    def make_relus_trainable(self)
+    def make_relus_trainable(self):
         for i, layer in enumerate(self.layers):
             if isinstance(layer, nn.ReLU):
                 layer.inplace = False

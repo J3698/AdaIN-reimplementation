@@ -11,12 +11,12 @@ from validate import validate_style_loss
 
 
 def train(adain_model, dataloader, val_dataloader, optimizer, \
-          scheduler, args, writer, saved_epoch, run):
+          scheduler, args, writer, run):
     global gwriter
     gwriter = writer
 
     loss = None
-    for epoch_num in range(saved_epoch, args.num_epochs):
+    for epoch_num in range(args.num_epochs):
         if args.checkpoint_freq != 0 and epoch_num % args.checkpoint_freq == 0:
             torch.save({
                 'model_state_dict': adain_model.state_dict(),
@@ -29,7 +29,6 @@ def train(adain_model, dataloader, val_dataloader, optimizer, \
                 'dataset_length': args.dataset_length,
                 'num_epochs': args.num_epochs, 'lr': args.lr,
                 'lambda_style': args.lambda_style,
-                'lambda_content': args.lambda_content,
                 'seed': args.seed, 'coco_path': args.coco_path,
                 'coco_labels_path': args.coco_labels_path,
                 'wiki_path': args.wikiart_path
@@ -43,21 +42,20 @@ def train(adain_model, dataloader, val_dataloader, optimizer, \
 
 def train_epoch_style_loss(args, adain_model, dataloader, val_dataloader,
                            optimizer, epoch_num, writer, run):
-    encoder.eval()
-    decoder.train()
+    adain_model.train()
 
     total_loss = 0
     num_batches = calc_num_batches(dataloader, args)
     progress_bar = tqdm.tqdm(enumerate(dataloader), total = num_batches, dynamic_ncols = True)
-    for i, (content_image, style_image) in progress_bar:
+    for i, (content_images, style_images) in progress_bar:
         # move to gpu
         content_images = content_images.to(args.device)
         style_images = style_images.to(args.device)
 
         # training
         optimizer.zero_grad()
-        style_loss, content_loss = get_style_transfer_loss(adain_model, content_images, style_images,\
-                                                           args.lambda_content, args.lambda_style)
+        style_loss, content_loss = get_style_transfer_loss(adain_model, content_images,\
+                                                           style_images, args.lambda_style)
         loss = style_loss + content_loss
         loss.backward()
         total_loss += loss.item()
@@ -73,7 +71,7 @@ def train_epoch_style_loss(args, adain_model, dataloader, val_dataloader,
     return total_loss
 
 
-def get_style_transfer_loss(adain_model, content_images, style_images, lambda_content, lambda_style):
+def get_style_transfer_loss(adain_model, content_images, style_images, lambda_style):
     style_features, content_features, stylized_features, stylized_images = adain_model(content_images, style_images)
     features_of_stylized = adain_model.encoder(stylized_images)
 
@@ -103,7 +101,7 @@ def calc_style_loss(features_of_stylized, style_features):
 
 
 def write_to_tensorboard(iteration, adain_model, val_dataloader, writer, style_loss, content_loss):
-    if it % args.save_freq == 0:
+    if it % args.log_freq == 0:
         validate_style_loss(adain_model, val_dataloader, it, writer, args.device)
         adain_model.train()
 

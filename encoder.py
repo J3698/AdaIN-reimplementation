@@ -24,7 +24,7 @@ class VGG19Encoder(nn.Module):
 
 
     def use_reflection_padding_for_convs(self):
-        for block in self.layers:
+        for block in self.blocks:
             for layer in block:
                 if isinstance(layer, nn.Conv2d):
                     layer.padding_mode = 'reflect'
@@ -33,7 +33,7 @@ class VGG19Encoder(nn.Module):
     def freeze_weights(self):
         for i in self.parameters():
             i.requires_grad = False
-        super().eval()
+        self.eval()
 
 
     def forward(self, x):
@@ -42,11 +42,13 @@ class VGG19Encoder(nn.Module):
 
     def calc_final_and_intermediate_outputs(self, x):
         outputs = []
-        for block in self.feats:
+        for block in self.blocks:
             x = block(x)
             outputs.append(x)
         return outputs
 
 
-    def train(self):
-        raise Exception("Encoder should not be trained")
+    def train(self, is_train = None):
+        if is_train is None or is_train:
+            raise Exception("Encoder should not be trained")
+        super().train(is_train)

@@ -21,23 +21,25 @@ def main():
     dataloader, val_dataloader = create_dataloaders(args)
 
     print("Creating model")
-    adain_model = StyleTransferModel.to(args.device)
+    adain_model = StyleTransferModel().to(args.device)
     print(adain_model)
 
     print(f"Workers: {args.num_workers}")
     print(f"Device: {args.device}")
 
-    optimizer = torch.optim.Adam(params = decoder.parameters(), lr = args.lr, weight_decay = 0)
-    scheduler = StepLR(optimizer, step_size = args.scheduler_step, gamma = args.scheduler_gamma)
+    optimizer = torch.optim.Adam(params = adain_model.decoder.parameters(),
+                                 lr = args.lr, weight_decay = 0)
+    scheduler = StepLR(optimizer, step_size = args.scheduler_step,
+                       gamma = args.scheduler_gamma)
 
     writer = SummaryWriter(comment = args.comment)
-    log_settings(writer, args)
+    log_settings(writer, adain_model, args)
 
     run = time.time()
     os.makedirs(f"demo/{run}")
 
-    train(adain_model, dataloader, val_dataloader, optimizer,\
-          scheduler, args, writer, saved_epoch, run, args.device)
+    train(adain_model, dataloader, val_dataloader, \
+          optimizer, scheduler, args, writer, run)
 
 
 def parse_arguments():
@@ -86,15 +88,16 @@ def create_dataloaders(args):
     return dataloader, val_dataloader
 
 
-def log_settings(writer, args):
+def log_settings(writer, model, args):
     writer.add_text('batch size', str(args.batch_size), 0)
-    writer.add_text('save freq', str(args.save_freq), 0)
+    writer.add_text('log freq', str(args.log_freq), 0)
+    writer.add_text('checkpoint freq', str(args.checkpoint_freq), 0)
     writer.add_text('is cuda', str(args.cuda), 0)
     writer.add_text('dataset length', str(args.dataset_length), 0)
     writer.add_text('num workers', str(args.num_workers), 0)
     writer.add_text('num epochs', str(args.num_epochs), 0)
     writer.add_text('lambda style', str(args.lambda_style), 0)
-    writer.add_text('model', repr(adain_model), 0)
+    writer.add_text('model', repr(model), 0)
     writer.add_text('lr', str(args.lr), 0)
 
 

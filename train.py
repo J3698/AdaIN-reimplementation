@@ -58,10 +58,10 @@ def train_epoch_style_loss(args, adain_model, dataloader, val_dataloader,
                                                            style_images, args.lambda_style)
         loss = style_loss + content_loss
         loss.backward()
-        total_loss += loss.item()
         optimizer.step()
 
         # logging
+        total_loss += loss.item()
         iteration = epoch_num * num_batches + i
         write_to_tensorboard(iteration, args, adain_model, val_dataloader, writer, style_loss, content_loss)
         progress_bar.set_postfix({'epoch': f"{epoch_num}", 'loss': f"{total_loss / (i + 1):.5f}"})

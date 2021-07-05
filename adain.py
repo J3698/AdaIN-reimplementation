@@ -13,14 +13,6 @@ def adain(source, target):
     return source_stats_matched
 
 
-def _check_shapes(source, target):
-    assert len(target.shape) == 4, "expected 4 dimensions"
-    assert target.shape == source.shape, "source/target shape mismatch"
-    batch_size, channels, width, height = source.shape
-
-    return batch_size, channels, width, height
-
-
 def calc_feature_stats(target):
     batch_size, channels, w, h = target.shape
     target_reshaped = target.view(batch_size, channels, 1, 1, -1)
@@ -35,6 +27,14 @@ def calc_feature_stats(target):
 
 def _match_normalized_to_stats(normalized, target_stdevs, target_means):
     return normalized * target_stdevs + target_means
+
+
+def _check_shapes(source, target):
+    assert len(target.shape) == 4, "expected 4 dimensions"
+    assert target.shape == source.shape, "source/target shape mismatch"
+    batch_size, channels, width, height = source.shape
+
+    return batch_size, channels, width, height
 
 
 def assert_shape(tensor, expected):

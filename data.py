@@ -34,7 +34,6 @@ class IterableStyleTransferDataset(IterableDataset):
         self.random = random.Random(rng_seed)
         print(length)
 
-
     def random_pair_of_indices(self):
         return self.random.randrange(len(self.coco)),\
                self.random.randrange(len(self.wiki))
@@ -78,12 +77,12 @@ class IterableStyleTransferDataset(IterableDataset):
         else:
             return content_image, style_image
 
-
     def _check_data_to_return(self, style_image, content_image):
         if not (style_image is None or isinstance(style_image, torch.Tensor)) or \
            not (content_image is None or isinstance(content_image, torch.Tensor)):
             warnings.warn("Given transform does not convert images to tensors;"
                           "default collate may fail.", UserWarning)
+
 
 class StyleTransferDataset(Dataset):
     def __init__(self, coco_path, coco_annotations, \
@@ -98,7 +97,6 @@ class StyleTransferDataset(Dataset):
         random.random()
         print(length)
         self.indices = [self.random_pair_of_indices() for i in range(length)]
-
 
     def random_pair_of_indices(self):
         return randrange(len(self.coco)), randrange(len(self.wiki))
@@ -121,7 +119,6 @@ class StyleTransferDataset(Dataset):
             return content_image
         else:
             return content_image, style_image
-
 
     def _check_data_to_return(self, style_image, content_image):
         if not (style_image is None or isinstance(style_image, torch.Tensor)) or \

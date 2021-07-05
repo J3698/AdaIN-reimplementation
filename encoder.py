@@ -11,7 +11,6 @@ class VGG19Encoder(nn.Module):
         self.use_reflection_padding_for_convs()
         self.freeze_weights()
 
-
     def load_pretrained_blocks(self):
         layers = torchvision.models.vgg19_bn(pretrained=True, progress=True).features
 
@@ -22,23 +21,19 @@ class VGG19Encoder(nn.Module):
 
         return nn.Sequential(block1, block2, block3, block4)
 
-
     def use_reflection_padding_for_convs(self):
         for block in self.blocks:
             for layer in block:
                 if isinstance(layer, nn.Conv2d):
                     layer.padding_mode = 'reflect'
 
-
     def freeze_weights(self):
         for i in self.parameters():
             i.requires_grad = False
         self.eval()
 
-
     def forward(self, x):
         return self.calc_final_and_intermediate_outputs(x)
-
 
     def calc_final_and_intermediate_outputs(self, x):
         outputs = []
@@ -46,7 +41,6 @@ class VGG19Encoder(nn.Module):
             x = block(x)
             outputs.append(x)
         return outputs
-
 
     def train(self, is_train = None):
         if is_train is None or is_train:

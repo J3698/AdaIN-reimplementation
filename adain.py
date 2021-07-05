@@ -6,11 +6,11 @@ import torch.nn.functional as F
 def adain(source, target):
     batch_size, channels, width, height = _check_shapes(source, target)
     source_normalized = F.instance_norm(source)
-    target_stdevs, target_means = calc_feature_stats(target, batch_size, channels)
+    target_stdevs, target_means = calc_feature_stats(target)
     source_stats_matched = _match_normalized_to_stats(source_normalized, target_stdevs, target_means)
 
-    assert result.shape == (batch_size, channels, width, height)
-    return result
+    assert source_stats_matched.shape == (batch_size, channels, width, height)
+    return source_stats_matched
 
 
 def _check_shapes(source, target):
@@ -21,13 +21,14 @@ def _check_shapes(source, target):
     return batch_size, channels, width, height
 
 
-def calc_feature_stats(target, batch_size, channels):
+def calc_feature_stats(target):
+    batch_size, channels, w, h = target.shape
     target_reshaped = target.view(batch_size, channels, 1, 1, -1)
     target_stdevs = target_reshaped.var(-1, unbiased = False) ** 0.5
     target_means = target_reshaped.mean(-1)
 
-    assert_shape(target_stdevs, (batch_size * channels,))
-    assert_shape(target_means, (batch_size * channels,))
+    assert_shape(target_stdevs, (batch_size, channels, 1, 1))
+    assert_shape(target_means, (batch_size, channels, 1, 1))
 
     return target_stdevs, target_means
 

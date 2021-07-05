@@ -63,9 +63,8 @@ def train_epoch_style_loss(args, adain_model, dataloader, val_dataloader,
 
         # logging
         iteration = epoch_num * num_batches + i
-        write_to_tensorboard(iteration, args, adain_model, val_dataloader, writer,
-                             style_loss, content_loss)
-        progress_bar.set_postfix({'epoch': f"{epoch_num}", 'loss': f"{total_loss / (i + 1):.2f}"})
+        write_to_tensorboard(iteration, args, adain_model, val_dataloader, writer, style_loss, content_loss)
+        progress_bar.set_postfix({'epoch': f"{epoch_num}", 'loss': f"{total_loss / (i + 1):.5f}"})
     writer.add_scalar('Loss/train', total_loss, epoch_num)
 
     return total_loss
@@ -76,38 +75,38 @@ def get_style_transfer_loss(adain_model, content_images, style_images, lambda_st
     features_of_stylized = adain_model.encoder(stylized_images)
 
     style_loss = lambda_style * calc_style_loss(features_of_stylized, style_features)
-    content_loss = lambda_content * calc_content_loss(features_of_stylized[-1], stylized_features)
-    return style_loss + content_loss
+    content_loss = calc_content_loss(features_of_stylized[-1], stylized_features)
+    return style_loss, content_loss
 
 
 def calc_content_loss(features_of_stylized, stylized_features):
-    return F.mse_loss(features_of_stylized, stylized_features, reduction = "sum")
+    return F.mse_loss(features_of_stylized, stylized_features)
 
 
 def calc_style_loss(features_of_stylized, style_features):
+    batch_size = features_of_stylized[0].shape[0]
     style_loss = 0
     for feat_of_stylized, style_feat in zip(features_of_stylized, style_features):
         stdevs1, means1 = adain.calc_feature_stats(feat_of_stylized)
         stdevs2, means2 = adain.calc_feature_stats(style_feat)
 
-        stdev_loss_vector = F.mse_loss(stdevs1, stdevs2, reduction = "mean") ** 0.5
-        mean_loss_vector = F.mse_loss(means1, means2, reduction = "mean") ** 0.5
+        stdev_loss_vector = F.mse_loss(stdevs1.view(batch_size, -1), stdevs2.view(batch_size, -1)) ** 0.5
+        mean_loss_vector = F.mse_loss(means1.view(batch_size, -1), means2.view(batch_size, -1)) ** 0.5
 
-        gwriter.add_scalar(f'Grads/{i}-mlayer', mean_loss_vector.item(), it)
-        gwriter.add_scalar(f'Grads/{i}-slayer', stdev_loss_vector.item(), it)
         style_loss += mean_loss_vector + stdev_loss_vector
 
     return style_loss
 
 
-def write_to_tensorboard(iteration, adain_model, val_dataloader, writer, style_loss, content_loss):
-    if it % args.log_freq == 0:
-        validate_style_loss(adain_model, val_dataloader, it, writer, args.device)
+def write_to_tensorboard(iteration, args, adain_model, val_dataloader, writer, style_loss, content_loss):
+    if iteration % args.log_freq == 0:
+        validate_style_loss(adain_model, val_dataloader, iteration, writer, args.device)
         adain_model.train()
 
-    writer.add_scalar('SLoss/style_it', style_loss.item(), it)
-    writer.add_scalar('CLoss/content_it', content_loss.item(), it)
-    writer.add_scalar('Loss/total_it', full_loss.item(), it)
+    writer.add_scalar('SLoss/style_it', style_loss.item(), iteration)
+    writer.add_scalar('CLoss/content_it', content_loss.item(), iteration)
+    full_loss = style_loss.item() + content_loss.item()
+    writer.add_scalar('Loss/total_it', full_loss, iteration)
 
 
 def calc_num_batches(dataloader, args):

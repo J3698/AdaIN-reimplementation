@@ -11,10 +11,10 @@ You can run the code like so:
 
 Here are some results (style, content, stylized):
 
-![results](https://antiprojects.com/pics/out1.png)
+<img src="https://antiprojects.com/pics/out4.png" alt="results" width="750"/>
 
-![results](https://antiprojects.com/pics/out2.png)
+<img src="https://antiprojects.com/pics/out1.png" alt="results" width="750"/>
 
-![results](https://antiprojects.com/pics/out3.png)
+<img src="https://antiprojects.com/pics/out2.png" alt="results" width="750"/>
 
-![results](https://antiprojects.com/pics/out4.png)
+<img src="https://antiprojects.com/pics/out3.png" alt="results" width="750"/>

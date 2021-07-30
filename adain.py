@@ -37,6 +37,15 @@ def _match_normalized_to_stats(normalized, target_stdevs, target_means):
     return normalized * target_stdevs + target_means
 
 
+def _check_shapes(source, target):
+    assert len(target.shape) == 4, "expected 4 dimensions"
+    assert target.shape[:2] == source.shape[:2], \
+            "source/target batch or channels mismatch"
+    batch_size, channels, width, height = source.shape
+
+    return batch_size, channels, width, height
+
+
 def assert_shape(tensor, expected):
     msg = f"expected {expected} actual {tensor.shape}"
     assert tensor.shape == expected, msg

@@ -1,0 +1,7 @@
+<?xml version="1.0" ?>
+<mapping>
+	<map>
+		<framework name="Div_0" out_port_id="0"/>
+		<IR name="Div_0/mul_" out_port_id="2" id="2"/>
+	</map>
+</mapping>

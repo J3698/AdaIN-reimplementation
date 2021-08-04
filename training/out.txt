@@ -1,0 +1,64 @@
+XLink initialized.
+Sending internal device firmware
+Successfully connected to device.
+Usb speed : Super/5000Mbps
+Mx serial id : 14442C10310550D000
+Loading config file
+Attempting to open stream config_d2h
+watchdog started 
+Successfully opened stream config_d2h with ID #0!
+Closing stream config_d2h: ...
+Closing stream config_d2h: DONE.
+EEPROM data: invalid / unprogrammed
+/home/anti/Projects/AdaIN-reimplementation/stylizer_config.json
+depthai: Calibration file is not specified, will use default setting;
+config_h2d json:
+{"_board":{"calib_data":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"mesh_left":[0.0],"mesh_right":[0.0]},"_load_inBlob":true,"_pipeline":{"_streams":[{"name":"metaout"},{"name":"previewout"}]},"ai":{"NCEs":1,"NN_config":{"NN_family":"mobilenet","output_format":"raw"},"blob0_size":14180736,"blob1_size":0,"calc_dist_to_bb":false,"camera_input":"rgb","cmx_slices":14,"keep_aspect_ratio":true,"num_stages":1,"shaves":14},"app":{"enable_reconfig":true,"sync_sequence_numbers":false,"sync_video_meta_streams":false,"usb_chunk_KiB":64},"board":{"clear-eeprom":false,"left_fov_deg":69.0,"left_to_rgb_distance_m":0.0,"left_to_right_distance_m":0.03500000014901161,"name":"","override-eeprom":false,"revision":"","rgb_fov_deg":69.0,"stereo_center_crop":false,"store-to-eeprom":false,"swap-left-and-right-cameras":false},"camera":{"mono":{"fps":30.0,"resolution_h":720,"resolution_w":1280},"rgb":{"fps":30.0,"resolution_h":1080,"resolution_w":1920}},"depth":{"depth_limit_mm":10000,"lr_check":false,"median_kernel_size":7,"padding_factor":0.30000001192092896,"warp_rectify":{"edge_fill_color":-1,"mirror_frame":true,"use_mesh":false}},"ot":{"confidence_threshold":0.5,"max_tracklets":20}}
+size of input string json_config_obj to config_h2d is ->1582
+size of json_config_obj that is expected to be sent to config_h2d is ->1048576
+Attempting to open stream config_h2d
+Successfully opened stream config_h2d with ID #1!
+Writing 1048576 bytes to config_h2d
+!!! XLink write successful: config_h2d (1048576)
+Closing stream config_h2d: ...
+Closing stream config_h2d: DONE.
+Creating observer stream host_capture: ...
+Attempting to open stream host_capture
+Successfully opened stream host_capture with ID #0!
+Creating observer stream host_capture: DONE.
+Read: 14180736
+Attempting to open stream inBlob
+Successfully opened stream inBlob with ID #1!
+Writing 14180736 bytes to inBlob
+!!! XLink write successful: inBlob (14180736)
+Closing stream inBlob: ...
+Closing stream inBlob: DONE.
+depthai: done sending Blob file /home/anti/Projects/AdaIN-reimplementation/exports/stylizer.blob
+Attempting to open stream outBlob
+Successfully opened stream outBlob with ID #2!
+[35mE: [global] [    206804] [python3] addEvent:262	Condition failed: event->header.flags.bitField.ack != 1[0m
+[35mE: [global] [    206804] [python3] addEventWithPerf:276	 addEvent(event) method call failed with an error: 3[0m
+[35mE: [global] [    206804] [python3] XLinkReadData:156	Condition failed: (addEventWithPerf(&event, &opTime))[0m
+Device get data failed: 7
+Closing stream outBlob: ...
+[35mE: [global] [    206805] [Scheduler00Thr] dispatcherEventSend:53	Write failed (header) (err -4) | event XLINK_CLOSE_STREAM_REQ
+[0m
+[35mE: [xLink] [    206805] [Scheduler00Thr] sendEvents:1027	Event sending failed[0m
+Closing stream outBlob: DONE.
+=== New data in observer stream host_capture, size: 4
+Writing 4 bytes to host_capture
+[35mE: [global] [    207024] [Scheduler00Thr] dispatcherEventSend:53	Write failed (header) (err -4) | event XLINK_WRITE_REQ
+[0m
+[35mE: [xLink] [    207024] [Scheduler00Thr] sendEvents:1027	Event sending failed[0m
+!!! XLink write successful: host_capture (4)
+Stopping threads: ...
+Stopping threads: DONE 0.000s.
+Closing all observer streams: ...
+Closing stream host_capture: ...
+Closing stream host_capture: DONE.
+Closing all observer streams: DONE.
+Reseting device: 0.
+[35mE: [global] [    207025] [Scheduler00Thr] dispatcherEventSend:53	Write failed (header) (err -4) | event XLINK_RESET_REQ
+[0m
+[35mE: [xLink] [    207025] [Scheduler00Thr] sendEvents:1027	Event sending failed[0m
+Reseting: DONE.

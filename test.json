@@ -1,0 +1,6 @@
+{
+    "NN_config": {
+        "output_format" : "raw",
+        "NN_family" : "mobilenet"
+    }
+}

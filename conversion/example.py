@@ -26,7 +26,7 @@ def clear_exports():
 
 
 def optimize_model(name):
-    optimizer_path = "/opt/intel/openvino_2020.1.023/" + \
+    optimizer_path = "/opt/intel/openvino_2021/" + \
                      "deployment_tools/model_optimizer/mo.py"
     subprocess.run(["python3", optimizer_path,
                     "--input_model", f"./exports/{name}.onnx",
@@ -57,12 +57,8 @@ def setup_pipeline():
     cam_rgb.setInterleaved(False)
 
     detection_nn = pipeline.createNeuralNetwork()
-    detection_nn.setBlobPath("./exports/test_openvino_2021.3_5shave.blob")
+    detection_nn.setBlobPath("./exports/test_openvino_2021.4_5shave.blob")
     cam_rgb.preview.link(detection_nn.input)
-
-    xout_rgb = pipeline.createXLinkOut()
-    xout_rgb.setStreamName("rgb")
-    cam_rgb.preview.link(xout_rgb.input)
 
     xout_nn = pipeline.createXLinkOut()
     xout_nn.setStreamName("nn")
@@ -73,26 +69,22 @@ def setup_pipeline():
 
 def run_pipeline(pipeline):
     with depthai.Device(pipeline) as device:
-        q_rgb = device.getOutputQueue("rgb")
         q_nn = device.getOutputQueue("nn", maxSize=4, blocking=False)
-        frame = None
         while True:
-            in_rgb = q_rgb.tryGet()
             in_nn = q_nn.tryGet()
-
-            if in_rgb is not None:
-                frame = in_rgb.getCvFrame()
-
             if in_nn is not None:
+                # get data
                 output = in_nn.getAllLayerNames()[-1]
                 data = np.array(in_nn.getLayerFp16(output))
+
+                # format data as image
                 data = data.reshape(3, 256, 256).transpose(1, 2, 0).astype(np.uint8)
                 data = cv2.resize(data, (1024, 1020))
+
+                # show image
                 cv2.imshow("preview", data)
 
-            if frame is not None:
-                pass
-
+            # quit if user presses q
             if cv2.waitKey(1) == ord('q'):
                 break
 

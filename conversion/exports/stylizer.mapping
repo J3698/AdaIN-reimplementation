@@ -1,0 +1,359 @@
+<?xml version="1.0"?>
+<mapping>
+	<map>
+		<framework name="input" output_port_id="input" />
+		<IR name="input" output_port_id="0" />
+	</map>
+	<map>
+		<framework name="Pad_13" output_port_id="104" />
+		<IR name="Pad_13" output_port_id="4" />
+	</map>
+	<map>
+		<framework name="567" output_port_id="567" />
+		<IR name="567" output_port_id="0" />
+	</map>
+	<map>
+		<framework name="Conv_14" output_port_id="566" />
+		<IR name="Conv_14" output_port_id="2" />
+	</map>
+	<map>
+		<framework name="Relu_15" output_port_id="107" />
+		<IR name="Relu_15" output_port_id="1" />
+	</map>
+	<map>
+		<framework name="Pad_29" output_port_id="130" />
+		<IR name="Pad_29" output_port_id="4" />
+	</map>
+	<map>
+		<framework name="570" output_port_id="570" />
+		<IR name="570" output_port_id="0" />
+	</map>
+	<map>
+		<framework name="Conv_30" output_port_id="569" />
+		<IR name="Conv_30" output_port_id="2" />
+	</map>
+	<map>
+		<framework name="Relu_31" output_port_id="133" />
+		<IR name="Relu_31" output_port_id="1" />
+	</map>
+	<map>
+		<framework name="MaxPool_32" output_port_id="134" />
+		<IR name="MaxPool_32" output_port_id="1" />
+	</map>
+	<map>
+		<framework name="Pad_46" output_port_id="157" />
+		<IR name="Pad_46" output_port_id="4" />
+	</map>
+	<map>
+		<framework name="573" output_port_id="573" />
+		<IR name="573" output_port_id="0" />
+	</map>
+	<map>
+		<framework name="Conv_47" output_port_id="572" />
+		<IR name="Conv_47" output_port_id="2" />
+	</map>
+	<map>
+		<framework name="Relu_48" output_port_id="160" />
+		<IR name="Relu_48" output_port_id="1" />
+	</map>
+	<map>
+		<framework name="Pad_62" output_port_id="183" />
+		<IR name="Pad_62" output_port_id="4" />
+	</map>
+	<map>
+		<framework name="576" output_port_id="576" />
+		<IR name="576" output_port_id="0" />
+	</map>
+	<map>
+		<framework name="Conv_63" output_port_id="575" />
+		<IR name="Conv_63" output_port_id="2" />
+	</map>
+	<map>
+		<framework name="Relu_64" output_port_id="186" />
+		<IR name="Relu_64" output_port_id="1" />
+	</map>
+	<map>
+		<framework name="MaxPool_65" output_port_id="187" />
+		<IR name="MaxPool_65" output_port_id="1" />
+	</map>
+	<map>
+		<framework name="Pad_79" output_port_id="210" />
+		<IR name="Pad_79" output_port_id="4" />
+	</map>
+	<map>
+		<framework name="579" output_port_id="579" />
+		<IR name="579" output_port_id="0" />
+	</map>
+	<map>
+		<framework name="Conv_80" output_port_id="578" />
+		<IR name="Conv_80" output_port_id="2" />
+	</map>
+	<map>
+		<framework name="Relu_81" output_port_id="213" />
+		<IR name="Relu_81" output_port_id="1" />
+	</map>
+	<map>
+		<framework name="Pad_95" output_port_id="236" />
+		<IR name="Pad_95" output_port_id="4" />
+	</map>
+	<map>
+		<framework name="582" output_port_id="582" />
+		<IR name="582" output_port_id="0" />
+	</map>
+	<map>
+		<framework name="Conv_96" output_port_id="581" />
+		<IR name="Conv_96" output_port_id="2" />
+	</map>
+	<map>
+		<framework name="Relu_97" output_port_id="239" />
+		<IR name="Relu_97" output_port_id="1" />
+	</map>
+	<map>
+		<framework name="Pad_111" output_port_id="262" />
+		<IR name="Pad_111" output_port_id="4" />
+	</map>
+	<map>
+		<framework name="585" output_port_id="585" />
+		<IR name="585" output_port_id="0" />
+	</map>
+	<map>
+		<framework name="Conv_112" output_port_id="584" />
+		<IR name="Conv_112" output_port_id="2" />
+	</map>
+	<map>
+		<framework name="Relu_113" output_port_id="265" />
+		<IR name="Relu_113" output_port_id="1" />
+	</map>
+	<map>
+		<framework name="Pad_127" output_port_id="288" />
+		<IR name="Pad_127" output_port_id="4" />
+	</map>
+	<map>
+		<framework name="588" output_port_id="588" />
+		<IR name="588" output_port_id="0" />
+	</map>
+	<map>
+		<framework name="Conv_128" output_port_id="587" />
+		<IR name="Conv_128" output_port_id="2" />
+	</map>
+	<map>
+		<framework name="Relu_129" output_port_id="291" />
+		<IR name="Relu_129" output_port_id="1" />
+	</map>
+	<map>
+		<framework name="MaxPool_130" output_port_id="292" />
+		<IR name="MaxPool_130" output_port_id="1" />
+	</map>
+	<map>
+		<framework name="Pad_144" output_port_id="315" />
+		<IR name="Pad_144" output_port_id="4" />
+	</map>
+	<map>
+		<framework name="591" output_port_id="591" />
+		<IR name="591" output_port_id="0" />
+	</map>
+	<map>
+		<framework name="Conv_145" output_port_id="590" />
+		<IR name="Conv_145" output_port_id="2" />
+	</map>
+	<map>
+		<framework name="Relu_146" output_port_id="318" />
+		<IR name="Relu_146" output_port_id="1" />
+	</map>
+	<map>
+		<framework name="Constant_147" output_port_id="319" />
+		<IR name="Constant_147" output_port_id="0" />
+	</map>
+	<map>
+		<framework name="Constant_148" output_port_id="320" />
+		<IR name="Constant_148" output_port_id="0" />
+	</map>
+	<map>
+		<framework name="InstanceNormalization_149" output_port_id="321" />
+		<IR name="InstanceNormalization_149" output_port_id="2" />
+	</map>
+	<map>
+		<framework name="Constant_150" output_port_id="322" />
+		<IR name="Constant_150" output_port_id="0" />
+	</map>
+	<map>
+		<framework name="Mul_151" output_port_id="323" />
+		<IR name="Mul_151" output_port_id="2" />
+	</map>
+	<map>
+		<framework name="Constant_152" output_port_id="324" />
+		<IR name="Constant_152" output_port_id="0" />
+	</map>
+	<map>
+		<framework name="Add_153" output_port_id="325" />
+		<IR name="Add_153" output_port_id="2" />
+	</map>
+	<map>
+		<framework name="Relu_154" output_port_id="326" />
+		<IR name="Relu_154" output_port_id="1" />
+	</map>
+	<map>
+		<framework name="Pad_168" output_port_id="349" />
+		<IR name="Pad_168" output_port_id="4" />
+	</map>
+	<map>
+		<framework name="decoder.layers.19.weight" output_port_id="decoder.layers.19.weight" />
+		<IR name="decoder.layers.19.weight" output_port_id="0" />
+	</map>
+	<map>
+		<framework name="Conv_169" output_port_id="350" />
+		<IR name="Conv_169" output_port_id="2" />
+	</map>
+	<map>
+		<framework name="643" output_port_id="643" />
+		<IR name="643" output_port_id="0" />
+	</map>
+	<map>
+		<framework name="Resize_171" output_port_id="355" />
+		<IR name="Resize_171" output_port_id="4" />
+	</map>
+	<map>
+		<framework name="Relu_172" output_port_id="356" />
+		<IR name="Relu_172" output_port_id="1" />
+	</map>
+	<map>
+		<framework name="Pad_186" output_port_id="379" />
+		<IR name="Pad_186" output_port_id="4" />
+	</map>
+	<map>
+		<framework name="decoder.layers.16.weight" output_port_id="decoder.layers.16.weight" />
+		<IR name="decoder.layers.16.weight" output_port_id="0" />
+	</map>
+	<map>
+		<framework name="Conv_187" output_port_id="380" />
+		<IR name="Conv_187" output_port_id="2" />
+	</map>
+	<map>
+		<framework name="Relu_188" output_port_id="381" />
+		<IR name="Relu_188" output_port_id="1" />
+	</map>
+	<map>
+		<framework name="Pad_202" output_port_id="404" />
+		<IR name="Pad_202" output_port_id="4" />
+	</map>
+	<map>
+		<framework name="decoder.layers.14.weight" output_port_id="decoder.layers.14.weight" />
+		<IR name="decoder.layers.14.weight" output_port_id="0" />
+	</map>
+	<map>
+		<framework name="Conv_203" output_port_id="405" />
+		<IR name="Conv_203" output_port_id="2" />
+	</map>
+	<map>
+		<framework name="Relu_204" output_port_id="406" />
+		<IR name="Relu_204" output_port_id="1" />
+	</map>
+	<map>
+		<framework name="Pad_218" output_port_id="429" />
+		<IR name="Pad_218" output_port_id="4" />
+	</map>
+	<map>
+		<framework name="decoder.layers.12.weight" output_port_id="decoder.layers.12.weight" />
+		<IR name="decoder.layers.12.weight" output_port_id="0" />
+	</map>
+	<map>
+		<framework name="Conv_219" output_port_id="430" />
+		<IR name="Conv_219" output_port_id="2" />
+	</map>
+	<map>
+		<framework name="Relu_220" output_port_id="431" />
+		<IR name="Relu_220" output_port_id="1" />
+	</map>
+	<map>
+		<framework name="Pad_234" output_port_id="454" />
+		<IR name="Pad_234" output_port_id="4" />
+	</map>
+	<map>
+		<framework name="decoder.layers.10.weight" output_port_id="decoder.layers.10.weight" />
+		<IR name="decoder.layers.10.weight" output_port_id="0" />
+	</map>
+	<map>
+		<framework name="Conv_235" output_port_id="455" />
+		<IR name="Conv_235" output_port_id="2" />
+	</map>
+	<map>
+		<framework name="664" output_port_id="664" />
+		<IR name="664" output_port_id="0" />
+	</map>
+	<map>
+		<framework name="Resize_237" output_port_id="460" />
+		<IR name="Resize_237" output_port_id="4" />
+	</map>
+	<map>
+		<framework name="Relu_238" output_port_id="461" />
+		<IR name="Relu_238" output_port_id="1" />
+	</map>
+	<map>
+		<framework name="Pad_252" output_port_id="484" />
+		<IR name="Pad_252" output_port_id="4" />
+	</map>
+	<map>
+		<framework name="decoder.layers.7.weight" output_port_id="decoder.layers.7.weight" />
+		<IR name="decoder.layers.7.weight" output_port_id="0" />
+	</map>
+	<map>
+		<framework name="Conv_253" output_port_id="485" />
+		<IR name="Conv_253" output_port_id="2" />
+	</map>
+	<map>
+		<framework name="Relu_254" output_port_id="486" />
+		<IR name="Relu_254" output_port_id="1" />
+	</map>
+	<map>
+		<framework name="Pad_268" output_port_id="509" />
+		<IR name="Pad_268" output_port_id="4" />
+	</map>
+	<map>
+		<framework name="decoder.layers.5.weight" output_port_id="decoder.layers.5.weight" />
+		<IR name="decoder.layers.5.weight" output_port_id="0" />
+	</map>
+	<map>
+		<framework name="Conv_269" output_port_id="510" />
+		<IR name="Conv_269" output_port_id="2" />
+	</map>
+	<map>
+		<framework name="675" output_port_id="675" />
+		<IR name="675" output_port_id="0" />
+	</map>
+	<map>
+		<framework name="Resize_271" output_port_id="515" />
+		<IR name="Resize_271" output_port_id="4" />
+	</map>
+	<map>
+		<framework name="Relu_272" output_port_id="516" />
+		<IR name="Relu_272" output_port_id="1" />
+	</map>
+	<map>
+		<framework name="Pad_286" output_port_id="539" />
+		<IR name="Pad_286" output_port_id="4" />
+	</map>
+	<map>
+		<framework name="decoder.layers.2.weight" output_port_id="decoder.layers.2.weight" />
+		<IR name="decoder.layers.2.weight" output_port_id="0" />
+	</map>
+	<map>
+		<framework name="Conv_287" output_port_id="540" />
+		<IR name="Conv_287" output_port_id="2" />
+	</map>
+	<map>
+		<framework name="Relu_288" output_port_id="541" />
+		<IR name="Relu_288" output_port_id="1" />
+	</map>
+	<map>
+		<framework name="Pad_302" output_port_id="564" />
+		<IR name="Pad_302" output_port_id="4" />
+	</map>
+	<map>
+		<framework name="decoder.layers.0.weight" output_port_id="decoder.layers.0.weight" />
+		<IR name="decoder.layers.0.weight" output_port_id="0" />
+	</map>
+	<map>
+		<framework name="output" output_port_id="output" />
+		<IR name="output" output_port_id="2" />
+	</map>
+</mapping>

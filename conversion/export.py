@@ -1,14 +1,14 @@
 #!/usr/bin/python3
 
 import sys
-sys.path.append("..")
+sys.path.append("../")
 
 import torch.nn as nn
-#from encoder import VGG19Encoder
+from training.encoder import VGG19Encoder
 from training.decoder import Decoder
-#from adain import adain
+from training.adain import adain
 from torch.utils.data import DataLoader
-#from data import StyleTransferDataset, get_transforms
+from training.data import StyleTransferDataset, get_transforms
 import torch
 
 
@@ -20,6 +20,7 @@ def export_stylizer():
 
     content = torch.ones((1, 3, 256, 256), requires_grad = False)
     model = OneStyleStylizer(style)
+    model.eval()
 
     torch.onnx.export(model, content, "exports/stylizer.onnx",
                       export_params = True,

@@ -33,8 +33,8 @@ print(D[0][0].min())
 tt = ToTensor()
 with Image.open("./content.jpg") as im1:
     with Image.open("style.jpg") as im2:
-        im1 = im1.resize((512, 512))
-        im2 = im2.resize((512, 512))
+        im1 = im1.resize((256, 256))
+        im2 = im2.resize((256, 256))
         c = tt(im1).unsqueeze(0)
         s = tt(im2).unsqueeze(0)
         print(c.max())
@@ -47,8 +47,7 @@ with Image.open("./content.jpg") as im1:
         print(out.shape)
         out = (out * 255).astype(np.uint8)
         image = Image.fromarray(out)
-        image.save("out.png", "PNG")
-aasda
+        image.save("out2.png", "PNG")
 
 curr = 0
 imgs = D[curr]

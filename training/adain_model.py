@@ -1,16 +1,24 @@
 import torch.nn as nn
 import torch
 from adain import adain
-from encoder import VGG19Encoder
+from encoder import VGG19Encoder, Resnet18Encoder
 from decoder import Decoder
 
 
 class StyleTransferModel(nn.Module):
-    def __init__(self):
+    def __init__(self, encoder = 'vgg'):
         super().__init__()
 
-        self.encoder = VGG19Encoder()
-        self.decoder = Decoder()
+        if encoder == 'vgg':
+            self.encoder = VGG19Encoder()
+            self.decoder = Decoder()
+        elif encoder == 'resnet':
+            self.encoder = Resnet18Encoder()
+            self.decoder = Decoder(128)
+        else:
+            raise NotImplementedError(f"{encoder} encoder not implemeted.")
+
+
 
     def forward(self, content_images, style_images):
         style_features = self.encoder(style_images)

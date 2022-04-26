@@ -15,9 +15,9 @@ from PIL import Image, ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
-def get_transforms(crop, size = 256):
+def get_transforms(crop, size):
     if crop:
-        return Compose([Resize(512), RandomCrop(size), ToTensor()])
+        return Compose([Resize(2 * size), RandomCrop(size), ToTensor()])
     return Compose([Resize((size, size)), ToTensor()])
 
 

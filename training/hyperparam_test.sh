@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 
 
-python3 main.py --num-epochs 1000 --dataset-length 10000 --crop --save-freq 100 --scheduler-step 10 "bigtest_bigstyle_schedule"
+python3 main.py "test2" --batch-size 32 --image-size 128 --scheduler-step 5 --scheduler-gamma 0.5 --lambda-style 0.3 --encoder resnet --swag --lr 0.001 --lambda-content 1e5
